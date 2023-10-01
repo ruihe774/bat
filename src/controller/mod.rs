@@ -57,6 +57,12 @@ impl<'a> Controller<'a> {
         output_buffer: Option<&mut dyn Write>,
         handle_error: impl Fn(&Error, &mut dyn Write),
     ) -> Result<bool> {
+        let panel_width = if self.config.loop_through {
+            0
+        } else {
+            InteractivePrinter::get_panel_width(self.config, self.assets)
+        };
+
         let interactive = output_buffer.is_none() && io::stdout().is_terminal();
 
         #[cfg(feature = "paging")]
@@ -67,7 +73,8 @@ impl<'a> Controller<'a> {
                 PagingMode::Never
             }),
             self.config.wrapping_mode,
-            self.config.pager,
+            self.config,
+            panel_width,
         )?;
 
         #[cfg(not(feature = "paging"))]

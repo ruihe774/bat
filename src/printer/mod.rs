@@ -154,12 +154,8 @@ impl<'a> InteractivePrinter<'a> {
         };
 
         // Create decorations.
-        let mut decorations: Vec<Box<dyn Decoration>> = Vec::new();
-
-        if config.style_components.numbers() {
-            decorations.push(Box::new(LineNumberDecoration::new(&colors)));
-        }
-
+        let mut decorations: Vec<Box<dyn Decoration>> =
+            Self::get_decorations(config, assets, &colors);
         let mut panel_width: usize =
             decorations.len() + decorations.iter().fold(0, |a, x| a + x.width());
 
@@ -207,6 +203,27 @@ impl<'a> InteractivePrinter<'a> {
             highlighter_from_set,
             background_color_highlight,
         })
+    }
+
+    fn get_decorations(
+        config: &Config,
+        _assets: &HighlightingAssets,
+        colors: &Colors,
+    ) -> Vec<Box<dyn Decoration>> {
+        // Create decorations.
+        let mut decorations: Vec<Box<dyn Decoration>> = Vec::new();
+
+        if config.style_components.numbers() {
+            decorations.push(Box::new(LineNumberDecoration::new(colors)));
+        }
+
+        return decorations;
+    }
+
+    pub(crate) fn get_panel_width(config: &'a Config, assets: &'a HighlightingAssets) -> usize {
+        let decorations = Self::get_decorations(config, assets, &Colors::plain());
+
+        return decorations.len() + decorations.iter().fold(0, |a, x| a + x.width());
     }
 
     fn print_horizontal_line_term(&self, handle: OutputHandle, style: Style) -> io::Result<()> {

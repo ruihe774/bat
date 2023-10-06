@@ -291,6 +291,10 @@ impl<'a> InputReader<'a> {
 
         Ok(res)
     }
+
+    pub(crate) fn peek_buffer(&mut self) -> io::Result<&[u8]> {
+        self.inner.fill_buf()
+    }
 }
 
 #[test]

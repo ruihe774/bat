@@ -10,6 +10,8 @@ use syntect::parsing::{SyntaxReference, SyntaxSet};
 use path_abs::PathAbs;
 
 use crate::error::*;
+#[cfg(feature = "guesslang")]
+use crate::guesslang::guesslang;
 use crate::input::{InputReader, OpenedInput};
 use crate::syntax_mapping::ignored_suffixes::IgnoredSuffixes;
 use crate::syntax_mapping::MappingTarget;
@@ -281,9 +283,15 @@ impl HighlightingAssets {
         match path_syntax {
             // If a path wasn't provided, or if path based syntax detection
             // above failed, we fall back to first-line syntax detection.
-            Err(Error::UndetectedSyntax(path)) => self
-                .get_first_line_syntax(&mut input.reader)?
-                .ok_or(Error::UndetectedSyntax(path)),
+            Err(Error::UndetectedSyntax(path)) => {
+                if let Some(sr) = self.get_first_line_syntax(&mut input.reader)? {
+                    Ok(sr)
+                } else if let Some(sr) = self.get_syntax_by_guesslang(&mut input.reader)? {
+                    Ok(sr)
+                } else {
+                    Err(Error::UndetectedSyntax(path))
+                }
+            }
             _ => path_syntax,
         }
     }
@@ -347,6 +355,31 @@ impl HighlightingAssets {
             .ok()
             .and_then(|l| syntax_set.find_syntax_by_first_line(&l))
             .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
+    }
+
+    #[cfg(not(feature = "guesslang"))]
+    fn get_syntax_by_guesslang(
+        &self,
+        reader: &mut InputReader,
+    ) -> Result<Option<SyntaxReferenceInSet>> {
+        Ok(None)
+    }
+
+    #[cfg(feature = "guesslang")]
+    fn get_syntax_by_guesslang(
+        &self,
+        reader: &mut InputReader,
+    ) -> Result<Option<SyntaxReferenceInSet>> {
+        let syntax_set = self.get_syntax_set()?;
+        Ok(reader.peek_buffer().ok().and_then(|t| {
+            guesslang(
+                String::from_utf8_lossy(t)
+                    .into_owned()
+                    .replace("\u{fffd}", ""),
+            )
+            .and_then(|l| syntax_set.find_syntax_by_token(l))
+            .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set })
+        }))
     }
 }
 

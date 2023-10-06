@@ -32,6 +32,8 @@ pub mod controller;
 mod decorations;
 mod diff;
 pub mod error;
+#[cfg(feature = "guesslang")]
+mod guesslang;
 pub mod input;
 mod less;
 #[cfg(feature = "lessopen")]

@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use ndarray::{Array0, CowArray};
@@ -70,7 +71,7 @@ pub(crate) fn guesslang(t: String) -> Option<&'static str> {
         .get_or_try_init(|| {
             SessionBuilder::new(environment)?
                 .with_custom_op_lib(env!("OCOS_LIB_PATH"))? // path to onnxruntime extensions "libortextensions"
-                .with_model_from_memory(include_bytes!("../assets/guesslang.onnx"))
+                .with_model_from_memory(include_bytes!("../assets/guesslang.ort"))
         })
         .expect("failed to init guesslang session");
 
@@ -79,12 +80,17 @@ pub(crate) fn guesslang(t: String) -> Option<&'static str> {
         .expect("failed to alloc guesslang model input")];
     let outputs = match session.run(inputs) {
         Ok(r) => r,
-        Err(_) => return None,
+        Err(_) => return None, // the model may error with very short input
     };
-    let output: OrtOwnedTensor<i64, _> = outputs[0]
+    let output: OrtOwnedTensor<f32, _> = outputs[0]
         .try_extract()
         .expect("failed to extract guesslang output");
     let output = output.view();
-    let lang = LABELS[*output.first().unwrap() as usize];
-    return Some(lang);
+    let (index, prob) = output
+        .iter()
+        .enumerate()
+        .max_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Equal))
+        .unwrap();
+    let lang = LABELS[index];
+    return if *prob > 0.5 { Some(lang) } else { None };
 }

@@ -353,7 +353,8 @@ impl HighlightingAssets {
         let syntax_set = self.get_syntax_set()?;
         Ok(reader
             .first_read
-            .as_ref().map(|s| s.split_inclusive('\n').next().unwrap_or(s))
+            .as_ref()
+            .map(|s| s.split_inclusive('\n').next().unwrap_or(s))
             .and_then(|l| syntax_set.find_syntax_by_first_line(l))
             .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
     }

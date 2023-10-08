@@ -1,13 +1,13 @@
+use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::borrow::Cow;
 
 use clircle::{Clircle, Identifier};
 use content_inspector::{self, ContentType};
-use encoding_rs::{UTF_8, UTF_16LE, UTF_16BE};
+use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
 
 use crate::error::*;
 
@@ -253,6 +253,7 @@ impl<'a> Input<'a> {
 
 pub(crate) struct InputReader<'a> {
     inner: Box<dyn BufRead + 'a>,
+    pub(crate) is_eof: bool,
     pub(crate) first_read: Option<String>,
     pub(crate) content_type: Option<ContentType>,
 }
@@ -260,6 +261,7 @@ pub(crate) struct InputReader<'a> {
 impl<'a> InputReader<'a> {
     pub(crate) fn new<R: BufRead + 'a>(mut reader: R) -> InputReader<'a> {
         let first_read = reader.fill_buf().ok().filter(|buf| !buf.is_empty());
+        let is_eof = first_read.is_none();
         let content_type = first_read.map(|buf| content_inspector::inspect(buf));
         let encoding = match content_type {
             Some(ContentType::UTF_8) | Some(ContentType::UTF_8_BOM) => Some(UTF_8),
@@ -273,12 +275,14 @@ impl<'a> InputReader<'a> {
                     // remove trailing replacement characters: they may be insufficient read
                     let truncated = s.trim_end_matches(char::REPLACEMENT_CHARACTER);
                     let len = truncated.len();
-                    if truncated.is_empty() { None } else {
+                    if truncated.is_empty() {
+                        None
+                    } else {
                         Some(match s {
                             Cow::Owned(mut s) => {
                                 s.truncate(len);
                                 s
-                            },
+                            }
                             Cow::Borrowed(_) => truncated.to_owned(),
                         })
                     }
@@ -289,14 +293,30 @@ impl<'a> InputReader<'a> {
             None
         };
 
-        InputReader { inner: Box::new(reader), first_read, content_type }
+        InputReader {
+            inner: Box::new(reader),
+            is_eof,
+            first_read,
+            content_type,
+        }
     }
 
     pub(crate) fn read_line(&mut self, buf: &mut Vec<u8>) -> io::Result<bool> {
-        let res = self.inner.read_until(b'\n', buf).map(|size| size > 0)?;
+        let res = self.inner.read_until(b'\n', buf)? > 0;
+        self.is_eof = !res || *buf.last().unwrap() != b'\n';
 
-        if self.content_type == Some(ContentType::UTF_16LE) {
-            let _ = self.inner.read_until(0x00, buf);
+        if res && self.content_type == Some(ContentType::UTF_16LE) {
+            if !self.is_eof {
+                let inner_buf = self.inner.fill_buf()?;
+                if inner_buf.first() != Some(&0) {
+                    return Err(io::Error::from(io::ErrorKind::InvalidData));
+                } else {
+                    buf.push(0);
+                    self.inner.consume(1);
+                }
+            } else if *buf.last().unwrap() != 0 {
+                return Err(io::Error::from(io::ErrorKind::InvalidData));
+            }
         }
 
         Ok(res)

@@ -16,8 +16,6 @@ use syntect::parsing::SyntaxSet;
 
 use content_inspector::ContentType;
 
-use encoding_rs::{UTF_16BE, UTF_16LE};
-
 use unicode_width::UnicodeWidthChar;
 
 use crate::assets::{HighlightingAssets, SyntaxReferenceInSet};
@@ -28,6 +26,7 @@ use crate::decorations::{Decoration, GridBorderDecoration, LineNumberDecoration}
 #[cfg(feature = "git")]
 use crate::diff::LineChanges;
 use crate::error::*;
+use crate::input::decode;
 use crate::input::OpenedInput;
 use crate::line_range::RangeCheckResult;
 use crate::preprocessor::{expand_tabs, replace_nonprintable};
@@ -463,23 +462,12 @@ impl<'a> Printer for InteractivePrinter<'a> {
             )
             .into()
         } else {
-            match self.content_type {
-                Some(ContentType::BINARY) | None => {
-                    return Ok(());
-                }
-                Some(ContentType::UTF_16LE) => UTF_16LE.decode_with_bom_removal(line_buffer).0,
-                Some(ContentType::UTF_16BE) => UTF_16BE.decode_with_bom_removal(line_buffer).0,
-                _ => {
-                    let line = String::from_utf8_lossy(line_buffer);
-                    if line_number == 1 {
-                        match line.strip_prefix('\u{feff}') {
-                            Some(stripped) => stripped.to_string().into(),
-                            None => line,
-                        }
-                    } else {
-                        line
-                    }
-                }
+            match self
+                .content_type
+                .and_then(|content_type| decode(line_buffer, content_type, line_number == 1))
+            {
+                Some(line) => line,
+                None => return Ok(()),
             }
         };
 

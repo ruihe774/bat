@@ -5,9 +5,9 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
+use bytemuck::try_cast_slice;
 use clircle::{Clircle, Identifier};
 use content_inspector::{self, ContentType};
-use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
 
 use crate::error::*;
 
@@ -262,35 +262,30 @@ impl<'a> InputReader<'a> {
     pub(crate) fn new<R: BufRead + 'a>(mut reader: R) -> InputReader<'a> {
         let first_read = reader.fill_buf().ok().filter(|buf| !buf.is_empty());
         let is_eof = first_read.is_none();
-        let content_type = first_read.map(|buf| content_inspector::inspect(buf));
-        let encoding = match content_type {
-            Some(ContentType::UTF_8) | Some(ContentType::UTF_8_BOM) => Some(UTF_8),
-            Some(ContentType::UTF_16LE) => Some(UTF_16LE),
-            Some(ContentType::UTF_16BE) => Some(UTF_16BE),
-            _ => None,
-        };
-        let first_read = if let (Some(first_read), Some(encoding)) = (first_read, encoding) {
-            match encoding.decode_with_bom_removal(first_read) {
-                (s, true) => {
-                    // remove trailing replacement characters: they may be insufficient read
-                    let truncated = s.trim_end_matches(char::REPLACEMENT_CHARACTER);
-                    let len = truncated.len();
-                    if truncated.is_empty() {
-                        None
-                    } else {
-                        Some(match s {
-                            Cow::Owned(mut s) => {
-                                s.truncate(len);
-                                s
-                            }
-                            Cow::Borrowed(_) => truncated.to_owned(),
-                        })
-                    }
+
+        let (first_read, content_type) = if let Some(first_read) = first_read {
+            let content_type = content_inspector::inspect(first_read);
+            let first_read = decode(first_read, content_type, true);
+            let first_read = if let Some(first_read) = first_read {
+                let truncated = first_read.trim_end_matches(char::REPLACEMENT_CHARACTER);
+                let len = truncated.len();
+                if len == 0 {
+                    None
+                } else {
+                    Some(match first_read {
+                        Cow::Borrowed(_) => truncated.to_owned(),
+                        Cow::Owned(mut s) => {
+                            s.truncate(len);
+                            s
+                        }
+                    })
                 }
-                (s, false) => Some(s.into_owned()),
-            }
+            } else {
+                None
+            };
+            (first_read, Some(content_type))
         } else {
-            None
+            (None, None)
         };
 
         InputReader {
@@ -321,6 +316,58 @@ impl<'a> InputReader<'a> {
 
         Ok(res)
     }
+}
+
+pub(crate) fn decode(
+    input: &[u8],
+    content_type: ContentType,
+    remove_bom: bool,
+) -> Option<Cow<'_, str>> {
+    use ContentType::*;
+    let decoded = match content_type {
+        UTF_8 | UTF_8_BOM => String::from_utf8_lossy(input),
+        UTF_16LE => {
+            let buf: Option<&[u16]> = if cfg!(target_endian = "little") {
+                try_cast_slice(&input[..(input.len() & !1)]).ok()
+            } else {
+                None
+            };
+            let buf: Cow<'_, [u16]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
+                input
+                    .chunks_exact(2)
+                    .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                    .collect()
+            });
+            String::from_utf16_lossy(buf.as_ref()).into()
+        }
+        UTF_16BE => {
+            let buf: Option<&[u16]> = if cfg!(target_endian = "big") {
+                try_cast_slice(&input[..(input.len() & !1)]).ok()
+            } else {
+                None
+            };
+            let buf: Cow<'_, [u16]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
+                input
+                    .chunks_exact(2)
+                    .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+                    .collect()
+            });
+            String::from_utf16_lossy(buf.as_ref()).into()
+        }
+        _ => return None,
+    };
+
+    Some(if remove_bom && decoded.starts_with('\u{feff}') {
+        match decoded {
+            Cow::Borrowed(s) => s["\u{feff}".len()..].into(),
+            Cow::Owned(mut s) => {
+                s.drain(.."\u{feff}".len());
+                s.into()
+            }
+        }
+    } else {
+        decoded
+    })
 }
 
 #[test]

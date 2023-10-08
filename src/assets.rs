@@ -351,9 +351,10 @@ impl HighlightingAssets {
         reader: &mut InputReader,
     ) -> Result<Option<SyntaxReferenceInSet>> {
         let syntax_set = self.get_syntax_set()?;
-        Ok(String::from_utf8(reader.first_line.clone())
-            .ok()
-            .and_then(|l| syntax_set.find_syntax_by_first_line(&l))
+        Ok(reader
+            .first_read
+            .as_ref().map(|s| s.split_inclusive('\n').next().unwrap_or(s))
+            .and_then(|l| syntax_set.find_syntax_by_first_line(l))
             .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
     }
 
@@ -371,15 +372,10 @@ impl HighlightingAssets {
         reader: &mut InputReader,
     ) -> Result<Option<SyntaxReferenceInSet>> {
         let syntax_set = self.get_syntax_set()?;
-        let mut probe = match String::from_utf8(reader.first_line.clone()) {
-            Ok(s) => s,
-            Err(_) => return Ok(None),
-        };
-        if let Ok(peek) = reader.peek_buffer() {
-            probe.push_str(String::from_utf8_lossy(peek).as_ref());
-        }
-        probe.truncate(probe.trim_end_matches(char::REPLACEMENT_CHARACTER).len());
-        Ok(guesslang(probe)
+        Ok(reader
+            .first_read
+            .as_ref()
+            .and_then(|s| guesslang(s.clone()))
             .and_then(|l| syntax_set.find_syntax_by_token(l))
             .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
     }

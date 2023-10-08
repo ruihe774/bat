@@ -204,11 +204,11 @@ impl<'b> Controller<'b> {
         add_header_padding: bool,
         #[cfg(feature = "git")] line_changes: &Option<LineChanges>,
     ) -> Result<()> {
-        if !input.reader.first_line.is_empty() || self.config.style_components.header() {
+        if input.reader.first_read.is_some() || self.config.style_components.header() {
             printer.print_header(writer, input, add_header_padding)?;
         }
 
-        if !input.reader.first_line.is_empty() {
+        if input.reader.first_read.is_some() {
             let line_ranges = match self.config.visible_lines {
                 VisibleLines::Ranges(ref line_ranges) => line_ranges.clone(),
                 #[cfg(feature = "git")]

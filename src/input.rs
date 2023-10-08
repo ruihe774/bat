@@ -3,9 +3,11 @@ use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
+use std::borrow::Cow;
 
 use clircle::{Clircle, Identifier};
 use content_inspector::{self, ContentType};
+use encoding_rs::{UTF_8, UTF_16LE, UTF_16BE};
 
 use crate::error::*;
 
@@ -251,38 +253,46 @@ impl<'a> Input<'a> {
 
 pub(crate) struct InputReader<'a> {
     inner: Box<dyn BufRead + 'a>,
-    pub(crate) first_line: Vec<u8>,
+    pub(crate) first_read: Option<String>,
     pub(crate) content_type: Option<ContentType>,
 }
 
 impl<'a> InputReader<'a> {
     pub(crate) fn new<R: BufRead + 'a>(mut reader: R) -> InputReader<'a> {
-        let mut first_line = vec![];
-        reader.read_until(b'\n', &mut first_line).ok();
-
-        let content_type = if first_line.is_empty() {
-            None
+        let first_read = reader.fill_buf().ok().filter(|buf| !buf.is_empty());
+        let content_type = first_read.map(|buf| content_inspector::inspect(buf));
+        let encoding = match content_type {
+            Some(ContentType::UTF_8) | Some(ContentType::UTF_8_BOM) => Some(UTF_8),
+            Some(ContentType::UTF_16LE) => Some(UTF_16LE),
+            Some(ContentType::UTF_16BE) => Some(UTF_16BE),
+            _ => None,
+        };
+        let first_read = if let (Some(first_read), Some(encoding)) = (first_read, encoding) {
+            match encoding.decode_with_bom_removal(first_read) {
+                (s, true) => {
+                    // remove trailing replacement characters: they may be insufficient read
+                    let truncated = s.trim_end_matches(char::REPLACEMENT_CHARACTER);
+                    let len = truncated.len();
+                    if truncated.is_empty() { None } else {
+                        Some(match s {
+                            Cow::Owned(mut s) => {
+                                s.truncate(len);
+                                s
+                            },
+                            Cow::Borrowed(_) => truncated.to_owned(),
+                        })
+                    }
+                }
+                (s, false) => Some(s.into_owned()),
+            }
         } else {
-            Some(content_inspector::inspect(&first_line[..]))
+            None
         };
 
-        if content_type == Some(ContentType::UTF_16LE) {
-            reader.read_until(0x00, &mut first_line).ok();
-        }
-
-        InputReader {
-            inner: Box::new(reader),
-            first_line,
-            content_type,
-        }
+        InputReader { inner: Box::new(reader), first_read, content_type }
     }
 
     pub(crate) fn read_line(&mut self, buf: &mut Vec<u8>) -> io::Result<bool> {
-        if !self.first_line.is_empty() {
-            buf.append(&mut self.first_line);
-            return Ok(true);
-        }
-
         let res = self.inner.read_until(b'\n', buf).map(|size| size > 0)?;
 
         if self.content_type == Some(ContentType::UTF_16LE) {
@@ -291,14 +301,6 @@ impl<'a> InputReader<'a> {
 
         Ok(res)
     }
-
-    pub(crate) fn peek_buffer(&mut self) -> io::Result<&[u8]> {
-        if self.first_line.is_empty() {
-            Ok(&[])
-        } else {
-            self.inner.fill_buf()
-        }
-    }
 }
 
 #[test]
@@ -306,7 +308,7 @@ fn basic() {
     let content = b"#!/bin/bash\necho hello";
     let mut reader = InputReader::new(&content[..]);
 
-    assert_eq!(b"#!/bin/bash\n", &reader.first_line[..]);
+    assert_eq!("#!/bin/bash\n", &reader.first_read.as_ref().unwrap()[..12]);
 
     let mut buffer = vec![];
 
@@ -334,8 +336,6 @@ fn basic() {
 fn utf16le() {
     let content = b"\xFF\xFE\x73\x00\x0A\x00\x64\x00";
     let mut reader = InputReader::new(&content[..]);
-
-    assert_eq!(b"\xFF\xFE\x73\x00\x0A\x00", &reader.first_line[..]);
 
     let mut buffer = vec![];
 

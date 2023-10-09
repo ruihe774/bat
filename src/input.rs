@@ -253,7 +253,6 @@ impl<'a> Input<'a> {
 
 pub(crate) struct InputReader<'a> {
     inner: Box<dyn BufRead + 'a>,
-    pub(crate) is_eof: bool,
     pub(crate) first_read: Option<String>,
     pub(crate) content_type: Option<ContentType>,
 }
@@ -261,7 +260,6 @@ pub(crate) struct InputReader<'a> {
 impl<'a> InputReader<'a> {
     pub(crate) fn new<R: BufRead + 'a>(mut reader: R) -> InputReader<'a> {
         let first_read = reader.fill_buf().ok().filter(|buf| !buf.is_empty());
-        let is_eof = first_read.is_none();
 
         let (first_read, content_type) = if let Some(first_read) = first_read {
             let content_type = content_inspector::inspect(first_read);
@@ -290,31 +288,43 @@ impl<'a> InputReader<'a> {
 
         InputReader {
             inner: Box::new(reader),
-            is_eof,
             first_read,
             content_type,
         }
     }
 
     pub(crate) fn read_line(&mut self, buf: &mut Vec<u8>) -> io::Result<bool> {
-        let res = self.inner.read_until(b'\n', buf)? > 0;
-        self.is_eof = !res || *buf.last().unwrap() != b'\n';
+        use ContentType::*;
+        let delimiter: &[u8] = match self.content_type {
+            Some(UTF_16LE) => b"\n\0",
+            Some(UTF_16BE) => b"\0\n",
+            Some(UTF_32LE) => b"\n\0\0\0",
+            Some(UTF_32BE) => b"\0\0\0\n",
+            _ => b"\n",
+        };
 
-        if res && self.content_type == Some(ContentType::UTF_16LE) {
-            if !self.is_eof {
-                let inner_buf = self.inner.fill_buf()?;
-                if inner_buf.first() != Some(&0) {
-                    return Err(io::Error::from(io::ErrorKind::InvalidData));
-                } else {
-                    buf.push(0);
-                    self.inner.consume(1);
+        let mut inner_buf = [0, 0, 0, 0];
+        let read_buf = &mut inner_buf[..delimiter.len()];
+        let mut r = Ok(false);
+        'outer: loop {
+            let mut read_bytes = 0;
+            while read_bytes < read_buf.len() {
+                let bytes = self.inner.read(&mut read_buf[read_bytes..])?;
+                if bytes == 0 {
+                    if read_bytes == 0 {
+                        break 'outer r;
+                    } else {
+                        break 'outer Err(io::Error::from(io::ErrorKind::UnexpectedEof));
+                    }
                 }
-            } else if *buf.last().unwrap() != 0 {
-                return Err(io::Error::from(io::ErrorKind::InvalidData));
+                read_bytes += bytes;
+            }
+            buf.extend_from_slice(read_buf);
+            r = Ok(true);
+            if read_buf == delimiter {
+                break r;
             }
         }
-
-        Ok(res)
     }
 }
 
@@ -338,7 +348,11 @@ pub(crate) fn decode(
                     .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
                     .collect()
             });
-            String::from_utf16_lossy(buf.as_ref()).into()
+            let mut s = String::from_utf16_lossy(buf.as_ref());
+            if input.len() & 1 != 0 {
+                s.push(char::REPLACEMENT_CHARACTER);
+            }
+            s.into()
         }
         UTF_16BE => {
             let buf: Option<&[u16]> = if cfg!(target_endian = "big") {
@@ -352,16 +366,63 @@ pub(crate) fn decode(
                     .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
                     .collect()
             });
-            String::from_utf16_lossy(buf.as_ref()).into()
+            let mut s = String::from_utf16_lossy(buf.as_ref());
+            if input.len() & 1 != 0 {
+                s.push(char::REPLACEMENT_CHARACTER);
+            }
+            s.into()
         }
-        _ => return None,
+        UTF_32LE => {
+            let buf: Option<&[u32]> = if cfg!(target_endian = "little") {
+                try_cast_slice(&input[..(input.len() & !3)]).ok()
+            } else {
+                None
+            };
+            let buf: Cow<'_, [u32]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
+                input
+                    .chunks_exact(4)
+                    .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                    .collect()
+            });
+            let mut s: String = buf
+                .iter()
+                .map(|ch| char::from_u32(*ch).unwrap_or(char::REPLACEMENT_CHARACTER))
+                .collect();
+            if input.len() & 3 != 0 {
+                s.push(char::REPLACEMENT_CHARACTER);
+            }
+            s.into()
+        }
+        UTF_32BE => {
+            let buf: Option<&[u32]> = if cfg!(target_endian = "big") {
+                try_cast_slice(&input[..(input.len() & !3)]).ok()
+            } else {
+                None
+            };
+            let buf: Cow<'_, [u32]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
+                input
+                    .chunks_exact(4)
+                    .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                    .collect()
+            });
+            let mut s: String = buf
+                .iter()
+                .map(|ch| char::from_u32(*ch).unwrap_or(char::REPLACEMENT_CHARACTER))
+                .collect();
+            if input.len() & 3 != 0 {
+                s.push(char::REPLACEMENT_CHARACTER);
+            }
+            s.into()
+        }
+        BINARY => return None,
     };
 
-    Some(if remove_bom && decoded.starts_with('\u{feff}') {
+    let bom = "\u{feff}";
+    Some(if remove_bom && decoded.starts_with(bom) {
         match decoded {
-            Cow::Borrowed(s) => s["\u{feff}".len()..].into(),
+            Cow::Borrowed(s) => s[bom.len()..].into(),
             Cow::Owned(mut s) => {
-                s.drain(.."\u{feff}".len());
+                s.drain(..bom.len());
                 s.into()
             }
         }

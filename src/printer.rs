@@ -342,6 +342,8 @@ impl<'a> Printer for InteractivePrinter<'a> {
             Some(ContentType::BINARY) => "   <BINARY>",
             Some(ContentType::UTF_16LE) => "   <UTF-16LE>",
             Some(ContentType::UTF_16BE) => "   <UTF-16BE>",
+            Some(ContentType::UTF_32LE) => "   <UTF-32LE>",
+            Some(ContentType::UTF_32BE) => "   <UTF-32BE>",
             None => "   <EMPTY>",
             _ => "",
         };

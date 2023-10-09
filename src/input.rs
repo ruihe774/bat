@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use bytemuck::try_cast_slice;
 use clircle::{Clircle, Identifier};
 use content_inspector::{self, ContentType};
 
@@ -334,59 +333,54 @@ pub(crate) fn decode(
     remove_bom: bool,
 ) -> Option<Cow<'_, str>> {
     use ContentType::*;
-    let decoded = match content_type {
-        UTF_8 | UTF_8_BOM => String::from_utf8_lossy(input),
+    let remove_bom = remove_bom.then_some(());
+    Some(match content_type {
+        UTF_8 | UTF_8_BOM => {
+            let input = remove_bom
+                .and_then(|_| input.strip_prefix(&[0xEF, 0xBB, 0xBF]))
+                .unwrap_or(input);
+            String::from_utf8_lossy(input)
+        }
         UTF_16LE => {
-            let buf: Option<&[u16]> = if cfg!(target_endian = "little") {
-                try_cast_slice(&input[..(input.len() & !1)]).ok()
-            } else {
-                None
-            };
-            let buf: Cow<'_, [u16]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
+            let input = remove_bom
+                .and_then(|_| input.strip_prefix(&[0xFF, 0xFE]))
+                .unwrap_or(input);
+            let mut s: String = char::decode_utf16(
                 input
                     .chunks_exact(2)
-                    .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-                    .collect()
-            });
-            let mut s = String::from_utf16_lossy(buf.as_ref());
+                    .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])),
+            )
+            .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect();
             if input.len() & 1 != 0 {
                 s.push(char::REPLACEMENT_CHARACTER);
             }
             s.into()
         }
         UTF_16BE => {
-            let buf: Option<&[u16]> = if cfg!(target_endian = "big") {
-                try_cast_slice(&input[..(input.len() & !1)]).ok()
-            } else {
-                None
-            };
-            let buf: Cow<'_, [u16]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
+            let input = remove_bom
+                .and_then(|_| input.strip_prefix(&[0xFE, 0xFF]))
+                .unwrap_or(input);
+            let mut s: String = char::decode_utf16(
                 input
                     .chunks_exact(2)
-                    .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
-                    .collect()
-            });
-            let mut s = String::from_utf16_lossy(buf.as_ref());
+                    .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])),
+            )
+            .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
+            .collect();
             if input.len() & 1 != 0 {
                 s.push(char::REPLACEMENT_CHARACTER);
             }
             s.into()
         }
         UTF_32LE => {
-            let buf: Option<&[u32]> = if cfg!(target_endian = "little") {
-                try_cast_slice(&input[..(input.len() & !3)]).ok()
-            } else {
-                None
-            };
-            let buf: Cow<'_, [u32]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
-                input
-                    .chunks_exact(4)
-                    .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-                    .collect()
-            });
-            let mut s: String = buf
-                .iter()
-                .map(|ch| char::from_u32(*ch).unwrap_or(char::REPLACEMENT_CHARACTER))
+            let input = remove_bom
+                .and_then(|_| input.strip_prefix(&[0xFF, 0xFE, 0x00, 0x00]))
+                .unwrap_or(input);
+            let mut s: String = input
+                .chunks_exact(4)
+                .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                .map(|ch| char::from_u32(ch).unwrap_or(char::REPLACEMENT_CHARACTER))
                 .collect();
             if input.len() & 3 != 0 {
                 s.push(char::REPLACEMENT_CHARACTER);
@@ -394,20 +388,13 @@ pub(crate) fn decode(
             s.into()
         }
         UTF_32BE => {
-            let buf: Option<&[u32]> = if cfg!(target_endian = "big") {
-                try_cast_slice(&input[..(input.len() & !3)]).ok()
-            } else {
-                None
-            };
-            let buf: Cow<'_, [u32]> = buf.map(|buf| buf.into()).unwrap_or_else(|| {
-                input
-                    .chunks_exact(4)
-                    .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-                    .collect()
-            });
-            let mut s: String = buf
-                .iter()
-                .map(|ch| char::from_u32(*ch).unwrap_or(char::REPLACEMENT_CHARACTER))
+            let input = remove_bom
+                .and_then(|_| input.strip_prefix(&[0x00, 0x00, 0xFE, 0xFF]))
+                .unwrap_or(input);
+            let mut s: String = input
+                .chunks_exact(4)
+                .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                .map(|ch| char::from_u32(ch).unwrap_or(char::REPLACEMENT_CHARACTER))
                 .collect();
             if input.len() & 3 != 0 {
                 s.push(char::REPLACEMENT_CHARACTER);
@@ -415,19 +402,6 @@ pub(crate) fn decode(
             s.into()
         }
         BINARY => return None,
-    };
-
-    let bom = "\u{feff}";
-    Some(if remove_bom && decoded.starts_with(bom) {
-        match decoded {
-            Cow::Borrowed(s) => s[bom.len()..].into(),
-            Cow::Owned(mut s) => {
-                s.drain(..bom.len());
-                s.into()
-            }
-        }
-    } else {
-        decoded
     })
 }
 

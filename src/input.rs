@@ -302,56 +302,26 @@ impl<'a> InputReader<'a> {
             _ => b"\n",
         };
 
+        let mut inner_buf = [0, 0, 0, 0];
+        let read_buf = &mut inner_buf[..delimiter.len()];
         let mut r = Ok(false);
-        if self.inner.fill_buf()?.len() % delimiter.len() == 0 {
-            loop {
-                let filled_buf = self.inner.fill_buf()?;
-                let filled_len = filled_buf.len();
-                if filled_len == 0 {
-                    break r;
-                }
-                let orig_size = buf.len();
-                buf.extend(
-                    filled_buf
-                        .chunks_exact(delimiter.len())
-                        .take_while(|chunk| *chunk != delimiter)
-                        .flatten(),
-                );
-                let new_size = buf.len();
-                let read_bytes = new_size - orig_size;
-                self.inner.consume(read_bytes);
-                r = Ok(true);
-                if read_bytes < filled_len {
-                    if filled_len - read_bytes < delimiter.len() {
-                        break Err(io::Error::from(io::ErrorKind::UnexpectedEof));
+        'outer: loop {
+            let mut read_bytes = 0;
+            while read_bytes < read_buf.len() {
+                let bytes = self.inner.read(&mut read_buf[read_bytes..])?;
+                if bytes == 0 {
+                    if read_bytes == 0 {
+                        break 'outer r;
+                    } else {
+                        break 'outer Err(io::Error::from(io::ErrorKind::UnexpectedEof));
                     }
-                    buf.extend_from_slice(delimiter);
-                    self.inner.consume(delimiter.len());
-                    break r;
                 }
+                read_bytes += bytes;
             }
-        } else {
-            // slow path
-            let mut inner_buf = [0, 0, 0, 0];
-            let read_buf = &mut inner_buf[..delimiter.len()];
-            'outer: loop {
-                let mut read_bytes = 0;
-                while read_bytes < read_buf.len() {
-                    let bytes = self.inner.read(&mut read_buf[read_bytes..])?;
-                    if bytes == 0 {
-                        if read_bytes == 0 {
-                            break 'outer r;
-                        } else {
-                            break 'outer Err(io::Error::from(io::ErrorKind::UnexpectedEof));
-                        }
-                    }
-                    read_bytes += bytes;
-                }
-                buf.extend_from_slice(read_buf);
-                r = Ok(true);
-                if read_buf == delimiter {
-                    break r;
-                }
+            buf.extend_from_slice(read_buf);
+            r = Ok(true);
+            if read_buf == delimiter {
+                break r;
             }
         }
     }

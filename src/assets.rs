@@ -371,15 +371,17 @@ impl HighlightingAssets {
         reader: &mut InputReader,
     ) -> Result<Option<SyntaxReferenceInSet>> {
         let syntax_set = self.get_syntax_set()?;
-        Ok(reader.peek_buffer().ok().and_then(|t| {
-            guesslang(
-                String::from_utf8_lossy(t)
-                    .into_owned()
-                    .replace("\u{fffd}", ""),
-            )
+        let mut probe = match String::from_utf8(reader.first_line.clone()) {
+            Ok(s) => s,
+            Err(_) => return Ok(None),
+        };
+        if let Ok(peek) = reader.peek_buffer() {
+            probe.push_str(String::from_utf8_lossy(peek).as_ref());
+        }
+        probe.truncate(probe.trim_end_matches(char::REPLACEMENT_CHARACTER).len());
+        Ok(guesslang(probe)
             .and_then(|l| syntax_set.find_syntax_by_token(l))
-            .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set })
-        }))
+            .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
     }
 }
 

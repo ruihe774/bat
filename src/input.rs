@@ -293,7 +293,11 @@ impl<'a> InputReader<'a> {
     }
 
     pub(crate) fn peek_buffer(&mut self) -> io::Result<&[u8]> {
-        self.inner.fill_buf()
+        if self.first_line.is_empty() {
+            Ok(&[])
+        } else {
+            self.inner.fill_buf()
+        }
     }
 }
 

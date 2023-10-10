@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
@@ -348,7 +348,7 @@ pub(crate) fn decode(
             let mut s: String = char::decode_utf16(
                 input
                     .chunks_exact(2)
-                    .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])),
+                    .map(|chunk| u16::from_le_bytes(chunk.try_into().unwrap())),
             )
             .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
             .collect();
@@ -364,7 +364,7 @@ pub(crate) fn decode(
             let mut s: String = char::decode_utf16(
                 input
                     .chunks_exact(2)
-                    .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])),
+                    .map(|chunk| u16::from_be_bytes(chunk.try_into().unwrap())),
             )
             .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
             .collect();
@@ -379,7 +379,7 @@ pub(crate) fn decode(
                 .unwrap_or(input);
             let mut s: String = input
                 .chunks_exact(4)
-                .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
                 .map(|ch| char::from_u32(ch).unwrap_or(char::REPLACEMENT_CHARACTER))
                 .collect();
             if input.len() & 3 != 0 {
@@ -393,7 +393,7 @@ pub(crate) fn decode(
                 .unwrap_or(input);
             let mut s: String = input
                 .chunks_exact(4)
-                .map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                .map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()))
                 .map(|ch| char::from_u32(ch).unwrap_or(char::REPLACEMENT_CHARACTER))
                 .collect();
             if input.len() & 3 != 0 {

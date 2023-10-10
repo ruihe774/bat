@@ -89,9 +89,10 @@ pub(crate) fn guesslang(t: String) -> Option<&'static str> {
     let output = output.view();
     let (index, prob) = output
         .iter()
+        .cloned()
         .enumerate()
         .max_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Equal))
         .unwrap();
     let lang = LABELS[index];
-    return if *prob > 0.5 { Some(lang) } else { None };
+    return if prob > 0.5 { Some(lang) } else { None };
 }

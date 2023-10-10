@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::error::*;
 
 #[derive(Debug, Clone)]
@@ -52,7 +50,8 @@ impl LineRange {
                 let first_byte = line_numbers[1].bytes().next();
 
                 new_range.upper = if first_byte == Some(b'+') {
-                    let more_lines = usize::from_str(&line_numbers[1][1..])
+                    let more_lines = &line_numbers[1][1..]
+                        .parse()
                         .map_err(|_| "Invalid character after +")?;
                     new_range.lower.saturating_add(*more_lines)
                 } else if first_byte == Some(b'-') {

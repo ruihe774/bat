@@ -87,7 +87,7 @@ optional = true
 features = ["wrap_help", "cargo"]
 
 [dependencies.ort]
-version = "1.16.1"
+path = "../ort-rs"
 optional = true
 default-features = false
 

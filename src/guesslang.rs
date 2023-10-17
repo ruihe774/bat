@@ -70,9 +70,8 @@ pub(crate) fn guesslang(t: String) -> Option<&'static str> {
     let session = SESSION
         .get_or_try_init(|| {
             SessionBuilder::new(environment)?
-                .with_custom_op_lib(env!("OCOS_LIB_PATH"))? // path to onnxruntime extensions "libortextensions"
-                .with_optimization_level(ort::GraphOptimizationLevel::Disable)? // the model is already optimized for CPU
-                .with_model_from_memory(include_bytes!("../assets/guesslang.onnx"))
+                .with_enable_ort_custom_ops()?
+                .with_model_from_memory(include_bytes!("../assets/guesslang.ort"))
         })
         .expect("failed to init guesslang session");
 

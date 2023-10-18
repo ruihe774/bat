@@ -936,7 +936,6 @@ fn env_var_bat_paging() {
     });
 }
 
-#[ignore]
 #[test]
 fn diagnostic_sanity_check() {
     bat()

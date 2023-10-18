@@ -17,6 +17,7 @@ default = ["application"]
 # Feature required for bat the application. Should be disabled when depending on
 # bat as a library.
 application = [
+    "bugreport",
     "git",
     "minimal-application",
     "guesslang",
@@ -54,7 +55,6 @@ serde_yaml = "0.9"
 semver = "1.0"
 path_abs = { version = "0.5", default-features = false }
 clircle = "0.4"
-bugreport = { version = "0.5.0", optional = true }
 etcetera = { version = "0.8.0", optional = true }
 grep-cli = { version = "0.1.9", optional = true }
 regex = { version = "1.8.3", optional = true }
@@ -85,6 +85,11 @@ git = "https://github.com/ruihe774/ort.git"
 branch = "msk"
 optional = true
 default-features = false
+
+[dependencies.bugreport]
+version = "0.5.0"
+optional = true
+features = ["format_plaintext"]
 
 [dev-dependencies]
 assert_cmd = "2.0.10"

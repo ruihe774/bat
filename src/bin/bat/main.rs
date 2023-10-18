@@ -221,7 +221,7 @@ fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> Resu
 
 #[cfg(feature = "bugreport")]
 fn invoke_bugreport(app: &App, cache_dir: &Path) {
-    use bugreport::{bugreport, collector::*, format::Markdown};
+    use bugreport::{bugreport, collector::*, format::Plaintext};
     let pager = bat::config::get_pager_executable(
         app.matches.get_one::<String>("pager").map(|s| s.as_str()),
     )
@@ -256,11 +256,7 @@ fn invoke_bugreport(app: &App, cache_dir: &Path) {
         ]))
         .info(FileContent::new("System Config file", system_config_file()))
         .info(FileContent::new("Config file", config_file()))
-        .info(FileContent::new(
-            "Custom assets metadata",
-            custom_assets_metadata,
-        ))
-        .info(DirectoryEntries::new("Custom assets", cache_dir))
+        .info(DirectoryEntries::new("Cached assets", cache_dir))
         .info(CompileTimeInformation::default());
 
     #[cfg(feature = "paging")]
@@ -272,7 +268,7 @@ fn invoke_bugreport(app: &App, cache_dir: &Path) {
         ))
     };
 
-    report.print::<Markdown>();
+    report.print::<Plaintext>();
 }
 
 /// Returns `Err(..)` upon fatal errors. Otherwise, returns `Ok(true)` on full success and

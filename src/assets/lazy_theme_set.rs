@@ -46,7 +46,7 @@ impl LazyThemeSet {
 
 impl LazyTheme {
     fn deserialize(&self) -> Result<Theme> {
-        asset_from_contents(&self.serialized[..], "lazy-loaded theme")
+        asset_from_reader(&self.serialized[..], "lazy-loaded theme")
     }
 }
 
@@ -85,7 +85,7 @@ impl TryFrom<ThemeSet> for LazyThemeSet {
                 serialized: crate::assets::build_assets::asset_to_contents(
                     &theme,
                     &format!("theme {}", name),
-                    false
+                    false,
                 )?,
                 deserialized: OnceCell::new(),
             };

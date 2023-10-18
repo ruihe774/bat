@@ -15,9 +15,7 @@ struct PathAndStem {
 /// Looks for LICENSE and NOTICE files in `source_dir`, does some rudimentary
 /// analysis, and compiles them together in a single string that is meant to be
 /// used in the output to `--acknowledgements`
-pub fn build_acknowledgements(
-    source_dir: &Path,
-) -> Result<Option<String>> {
+pub fn build_acknowledgements(source_dir: &Path) -> Result<Option<String>> {
     let mut acknowledgements = format!("{}\n\n", include_str!("../../../NOTICE"));
 
     // Sort entries so the order is stable over time

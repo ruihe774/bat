@@ -1,9 +1,8 @@
-use std::collections::hash_map::DefaultHasher;
+use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
-use std::fs;
-use std::hash::Hasher;
-use std::io::Write;
-use std::os::unix::prelude::OsStrExt;
+use std::fmt::Display;
+use std::fs::{self, File};
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 use flate2::write::GzDecoder;
@@ -32,15 +31,36 @@ pub(crate) mod assets_metadata;
 mod build_assets;
 mod lazy_theme_set;
 
+const SYNTAXES_DIGEST: u32 = 0xcb61a0a1;
+const THEMES_DIGEST: u32 = 0x802cbbf5;
+const GUESSLANG_DIGEST: u32 = 0x668e6dc7;
+const ACKNOWLEDGEMENTS_DIGEST: u32 = 0xc9e927bb;
+
 macro_rules! include_asset_bytes {
-    ($assert_path:literal, $cache_dir:expr) => {
-        load_asset_bytes($assert_path, include_bytes!($assert_path), $cache_dir)
+    ($asset_path:literal, $cache_dir:expr, $digest:expr) => {
+        create_asset_reader(
+            $asset_path,
+            include_bytes!($asset_path),
+            $cache_dir,
+            $digest,
+        )
+        .and_then(|mut reader| {
+            let mut v = Vec::new();
+            reader.read_to_end(&mut v)?;
+            Ok(v)
+        })
     };
 }
 
 macro_rules! include_asset {
-    ($assert_path:literal, $cache_dir:expr) => {
-        include_asset_bytes!($assert_path, $cache_dir).and_then(|bytes| asset_from_contents(&bytes, $assert_path))
+    ($asset_path:literal, $cache_dir:expr, $digest:expr) => {
+        create_asset_reader(
+            $asset_path,
+            include_bytes!($asset_path),
+            $cache_dir,
+            $digest,
+        )
+        .and_then(|reader| asset_from_reader(reader, $asset_path))
     };
 }
 
@@ -61,22 +81,30 @@ impl HighlightingAssets {
     pub fn new(cache_path: impl AsRef<Path>) -> Result<Self> {
         let cache_path = cache_path.as_ref();
         Ok(HighlightingAssets {
-            syntax_set: include_asset!("../assets/syntaxes.gz", Some(cache_path))?,
-            theme_set: include_asset!("../assets/themes.gz", Some(cache_path))?,
+            syntax_set: include_asset!("../assets/syntaxes.gz", Some(cache_path), SYNTAXES_DIGEST)?,
+            theme_set: include_asset!("../assets/themes.gz", Some(cache_path), THEMES_DIGEST)?,
             guesslang: GuessLang::new(include_asset_bytes!(
                 "../assets/guesslang.ort.gz",
-                Some(cache_path)
+                Some(cache_path),
+                GUESSLANG_DIGEST
             )?),
         })
     }
 
-    #[cfg(test)]
+    #[cfg(debug_assertions)]
     pub fn with_no_cache() -> Self {
         HighlightingAssets {
-            syntax_set: include_asset!("../assets/syntaxes.gz", Option::<&Path>::None).unwrap(),
-            theme_set: include_asset!("../assets/themes.gz", Option::<&Path>::None).unwrap(),
+            syntax_set: include_asset!("../assets/syntaxes.gz", Option::<&Path>::None, SYNTAXES_DIGEST)
+                .unwrap(),
+            theme_set: include_asset!("../assets/themes.gz", Option::<&Path>::None, THEMES_DIGEST)
+                .unwrap(),
             guesslang: GuessLang::new(
-                include_asset_bytes!("../assets/guesslang.ort.gz", Option::<&Path>::None).unwrap(),
+                include_asset_bytes!(
+                    "../assets/guesslang.ort.gz",
+                    Option::<&Path>::None,
+                    GUESSLANG_DIGEST
+                )
+                .unwrap(),
             ),
         }
     }
@@ -354,7 +382,12 @@ impl HighlightingAssets {
 }
 
 pub fn get_acknowledgements() -> String {
-    include_asset!("../assets/acknowledgements.gz", Option::<&Path>::None).unwrap()
+    include_asset!(
+        "../assets/acknowledgements.gz",
+        Option::<&Path>::None,
+        ACKNOWLEDGEMENTS_DIGEST
+    )
+    .unwrap()
 }
 
 #[cfg(target_os = "macos")]
@@ -373,85 +406,53 @@ fn macos_dark_mode_active() -> bool {
     is_dark
 }
 
-fn hash(data: &[u8]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    hasher.write(data);
-    hasher.finish()
-}
-
-fn load_asset_bytes(
-    assert_path: impl AsRef<Path>,
+fn create_asset_reader(
+    asset_path: impl AsRef<Path>,
     data: &[u8],
     cache_dir: Option<impl AsRef<Path>>,
-) -> Result<Vec<u8>> {
-    let assert_path = assert_path.as_ref();
-    let mut uncompressed_data: Option<Vec<u8>> = None;
-    let mut cache_file = OsString::new();
-    if let Some(cache_dir) = &cache_dir {
-        let digest = hash(data);
-        cache_file.push(
-            assert_path
-                .file_stem()
-                .expect("assert_path has no file stem"),
-        );
+    digest: u32,
+) -> Result<Box<dyn Read>> {
+    let cache_file = if let Some(cache_dir) = cache_dir {
+        let mut cache_file = asset_path
+            .as_ref()
+            .file_stem()
+            .expect("asset_path has no file stem")
+            .to_owned();
         debug_assert_eq!(
-            assert_path.extension().unwrap().to_str().unwrap(),
+            asset_path.as_ref().extension().unwrap().to_str().unwrap(),
             "gz",
-            "assert_path must end with .gz"
+            "asset_path must end with .gz"
         );
-        cache_file.push(OsString::from(format!(".{:X}.", digest)));
-        let cache_dir = cache_dir.as_ref();
-        for entry in cache_dir.read_dir()? {
-            if let Ok(entry) = entry {
-                let file_name = entry.file_name();
-                if file_name.as_bytes().starts_with(cache_file.as_bytes()) {
-                    let cache_path = entry.path();
-                    if let Ok(data) = fs::read(&cache_path) {
-                        let digest = hash(&data);
-                        let file_name = Path::new(&file_name);
-                        if let Some(expected_digest) = file_name
-                            .file_stem()
-                            .map(|stem| Path::new(stem))
-                            .and_then(|stem| stem.extension())
-                        {
-                            if expected_digest
-                                .to_str()
-                                .map(|expected| expected == format!("{:X}", digest))
-                                .unwrap_or(false)
-                            {
-                                uncompressed_data = Some(data);
-                                break;
-                            } else {
-                                bat_warning!("Cache corrupted: {}", cache_path.display());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    let uncompressed_data = if let Some(uncompressed_data) = uncompressed_data {
-        uncompressed_data
+        cache_file.push(OsString::from(format!(".{:X}.bin", digest)));
+        let cache_file = cache_dir.as_ref().join(cache_file.as_os_str());
+        Some(cache_file)
     } else {
-        let buffer = Vec::new();
-        let mut decoder = GzDecoder::new(buffer);
-        decoder.write_all(data)?;
-        let buffer = decoder.finish()?;
-        if let Some(cache_dir) = &cache_dir {
-            let cache_dir = cache_dir.as_ref();
-            let digest = hash(&buffer);
-            cache_file.push(OsString::from(format!("{:X}.bin", digest)));
-            let cache_path = cache_dir.join(cache_file);
-            fs::write(&cache_path, &buffer)?;
-        }
-        buffer
+        None
     };
-    Ok(uncompressed_data)
+    Ok(
+        if let Some(file) = cache_file
+            .as_ref()
+            .and_then(|cache_file| File::open(cache_file).ok())
+        {
+            Box::new(io::BufReader::new(file))
+        } else {
+            let buffer = VecDeque::new();
+            let mut decoder = GzDecoder::new(buffer);
+            decoder.write_all(data)?;
+            let mut buffer = decoder.finish()?;
+            if let Some(cache_file) = cache_file {
+                fs::write(cache_file, buffer.make_contiguous())?;
+            }
+            Box::new(buffer)
+        },
+    )
 }
 
-fn asset_from_contents<T: DeserializeOwned>(contents: &[u8], description: &str) -> Result<T> {
-    bincode::deserialize_from(contents)
-        .map_err(|_| format!("Could not parse {}", description).into())
+fn asset_from_reader<T: DeserializeOwned>(
+    reader: impl Read,
+    description: impl Display,
+) -> Result<T> {
+    bincode::deserialize_from(reader).map_err(|_| format!("Could not parse {}", description).into())
 }
 
 #[cfg(test)]
@@ -740,5 +741,14 @@ mod tests {
             test.get_syntax_name(None, &mut opened_input, &test.syntax_mapping),
             "SSH Config"
         );
+    }
+
+    #[test]
+    fn assets_integrity() {
+        use crc32fast::hash;
+        assert_eq!(SYNTAXES_DIGEST, hash(include_bytes!("../assets/syntaxes.gz")));
+        assert_eq!(THEMES_DIGEST, hash(include_bytes!("../assets/themes.gz")));
+        assert_eq!(GUESSLANG_DIGEST, hash(include_bytes!("../assets/guesslang.ort.gz")));
+        assert_eq!(ACKNOWLEDGEMENTS_DIGEST, hash(include_bytes!("../assets/acknowledgements.gz")));
     }
 }

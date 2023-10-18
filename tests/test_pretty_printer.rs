@@ -2,7 +2,7 @@ use bat::PrettyPrinter;
 
 #[test]
 fn syntaxes() {
-    let printer = PrettyPrinter::new();
+    let printer = PrettyPrinter::with_no_cache();
     let syntaxes: Vec<String> = printer.syntaxes().map(|s| s.name).collect();
 
     // Just do some sanity checking

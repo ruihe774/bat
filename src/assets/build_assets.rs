@@ -9,11 +9,7 @@ use acknowledgements::build_acknowledgements;
 
 mod acknowledgements;
 
-pub fn build(
-    source_dir: &Path,
-    target_dir: &Path,
-    current_version: &str,
-) -> Result<()> {
+pub fn build(source_dir: &Path, target_dir: &Path, current_version: &str) -> Result<()> {
     let theme_set = build_theme_set(source_dir)?;
 
     let syntax_set_builder = build_syntax_set_builder(source_dir)?;
@@ -56,9 +52,7 @@ fn build_theme_set(source_dir: &Path) -> Result<LazyThemeSet> {
     theme_set.try_into()
 }
 
-fn build_syntax_set_builder(
-    source_dir: &Path,
-) -> Result<SyntaxSetBuilder> {
+fn build_syntax_set_builder(source_dir: &Path) -> Result<SyntaxSetBuilder> {
     let mut syntax_set_builder = {
         let mut builder = syntect::parsing::SyntaxSetBuilder::new();
         builder.add_plain_text_syntax();
@@ -96,16 +90,8 @@ fn write_assets(
     current_version: &str,
 ) -> Result<()> {
     let _ = std::fs::create_dir_all(target_dir);
-    asset_to_cache(
-        theme_set,
-        &target_dir.join("themes.gz"),
-        "theme set",
-    )?;
-    asset_to_cache(
-        syntax_set,
-        &target_dir.join("syntaxes.gz"),
-        "syntax set",
-    )?;
+    asset_to_cache(theme_set, &target_dir.join("themes.gz"), "theme set")?;
+    asset_to_cache(syntax_set, &target_dir.join("syntaxes.gz"), "syntax set")?;
 
     if let Some(acknowledgements) = acknowledgements {
         asset_to_cache(
@@ -143,11 +129,7 @@ pub(crate) fn asset_to_contents<T: serde::Serialize>(
     Ok(contents)
 }
 
-fn asset_to_cache<T: serde::Serialize>(
-    asset: &T,
-    path: &Path,
-    description: &str,
-) -> Result<()> {
+fn asset_to_cache<T: serde::Serialize>(asset: &T, path: &Path, description: &str) -> Result<()> {
     print!("Writing {} to {} ... ", description, path.to_string_lossy());
     let contents = asset_to_contents(asset, description, true)?;
     std::fs::write(path, &contents[..]).map_err(|_| {

@@ -63,6 +63,25 @@ impl<'a> PrettyPrinter<'a> {
         })
     }
 
+    #[cfg(debug_assertions)]
+    pub fn with_no_cache() -> Self {
+        let config = Config {
+            colored_output: true,
+            true_color: true,
+            ..Default::default()
+        };
+
+        PrettyPrinter {
+            inputs: vec![],
+            config,
+            assets: HighlightingAssets::with_no_cache(),
+
+            highlighted_lines: vec![],
+            term_width: None,
+            active_style_components: ActiveStyleComponents::default(),
+        }
+    }
+
     /// Add an input which should be pretty-printed
     pub fn input(&mut self, input: Input<'a>) -> &mut Self {
         self.inputs.push(input);

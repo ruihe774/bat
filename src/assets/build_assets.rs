@@ -108,13 +108,13 @@ fn write_assets(
     let _ = std::fs::create_dir_all(target_dir);
     asset_to_cache(
         theme_set,
-        &target_dir.join("themes.bin"),
+        &target_dir.join("themes.gz"),
         "theme set",
         COMPRESS_THEMES,
     )?;
     asset_to_cache(
         syntax_set,
-        &target_dir.join("syntaxes.bin"),
+        &target_dir.join("syntaxes.gz"),
         "syntax set",
         COMPRESS_SYNTAXES,
     )?;
@@ -122,7 +122,7 @@ fn write_assets(
     if let Some(acknowledgements) = acknowledgements {
         asset_to_cache(
             acknowledgements,
-            &target_dir.join("acknowledgements.bin"),
+            &target_dir.join("acknowledgements.gz"),
             "acknowledgements",
             COMPRESS_ACKNOWLEDGEMENTS,
         )?;

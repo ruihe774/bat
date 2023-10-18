@@ -17,8 +17,6 @@ default = ["application"]
 # Feature required for bat the application. Should be disabled when depending on
 # bat as a library.
 application = [
-    "bugreport",
-    "build-assets",
     "git",
     "minimal-application",
     "guesslang",

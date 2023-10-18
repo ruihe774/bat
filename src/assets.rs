@@ -47,16 +47,16 @@ pub struct SyntaxReferenceInSet<'a> {
 
 /// Lazy-loaded syntaxes are already compressed, and we don't want to compress
 /// already compressed data.
-pub(crate) const COMPRESS_SYNTAXES: bool = false;
+pub(crate) const COMPRESS_SYNTAXES: bool = true;
 
 /// We don't want to compress our [LazyThemeSet] since the lazy-loaded themes
 /// within it are already compressed, and compressing another time just makes
 /// performance suffer
-pub(crate) const COMPRESS_THEMES: bool = false;
+pub(crate) const COMPRESS_THEMES: bool = true;
 
 /// Compress for size of ~40 kB instead of ~200 kB without much difference in
 /// performance due to lazy-loading
-pub(crate) const COMPRESS_LAZY_THEMES: bool = true;
+pub(crate) const COMPRESS_LAZY_THEMES: bool = false;
 
 /// Compress for size of ~10 kB instead of ~120 kB
 pub(crate) const COMPRESS_ACKNOWLEDGEMENTS: bool = true;

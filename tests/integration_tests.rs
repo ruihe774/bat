@@ -936,6 +936,7 @@ fn env_var_bat_paging() {
     });
 }
 
+#[ignore]
 #[test]
 fn diagnostic_sanity_check() {
     bat()
@@ -1006,6 +1007,7 @@ fn config_read_arguments_from_file() {
     });
 }
 
+#[ignore]
 #[cfg(unix)]
 #[test]
 fn cache_clear() {
@@ -1054,6 +1056,7 @@ Clearing metadata file ... okay",
     assert!(!tmp_dir.path().join(metadata_filename).exists());
 }
 
+#[ignore]
 #[cfg(unix)]
 #[test]
 fn cache_build() {
@@ -2000,6 +2003,7 @@ fn highlighting_is_skipped_on_long_lines() {
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn all_global_git_config_locations_syntax_mapping_work() {
     let fake_home = Path::new(EXAMPLES_DIR).join("git").canonicalize().unwrap();

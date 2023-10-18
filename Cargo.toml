@@ -29,17 +29,12 @@ minimal-application = [
     "clap",
     "etcetera",
     "paging",
-    "regex-onig",
     "wild",
 ]
 git = ["git2"] # Support indicating git modifications
 paging = ["shell-words", "grep-cli"] # Support applying a pager on the output
 lessopen = ["run_script", "os_str_bytes"] # Support $LESSOPEN preprocessor
 build-assets = ["syntect/yaml-load", "syntect/plist-load", "regex", "walkdir"]
-
-# You need to use one of these if you depend on bat as a library:
-regex-onig = ["syntect/regex-onig"] # Use the "oniguruma" regex engine
-regex-fancy = ["syntect/regex-fancy"] # Use the rust-only "fancy-regex" engine
 
 guesslang = ["ort", "ndarray"]
 
@@ -77,9 +72,10 @@ optional = true
 default-features = false
 
 [dependencies.syntect]
-version = "5.0.0"
+git = "https://github.com/ruihe774/syntect.git"
+branch = "msk"
 default-features = false
-features = ["parsing"]
+features = ["parsing", "regex-onig"]
 
 [dependencies.clap]
 version = "4.4.6"

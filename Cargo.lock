@@ -154,21 +154,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bit-set"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
-dependencies = [
- "bit-vec",
-]
-
-[[package]]
-name = "bit-vec"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -400,16 +385,6 @@ checksum = "30d9eafeadd538e68fb28016364c9732d78e420b9ff8853fa5e4058861e9f8d3"
 dependencies = [
  "dissimilar",
  "once_cell",
-]
-
-[[package]]
-name = "fancy-regex"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b95f7c0680e4142284cf8b22c14a476e87d61b004a3a0861872b32ef7ead40a2"
-dependencies = [
- "bit-set",
- "regex",
 ]
 
 [[package]]
@@ -1263,13 +1238,10 @@ dependencies = [
 [[package]]
 name = "syntect"
 version = "5.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e02b4b303bf8d08bfeb0445cba5068a3d306b6baece1d5582171a9bf49188f91"
+source = "git+https://github.com/ruihe774/syntect.git?branch=msk#d1decb7af8adca531391db92f77baf1796d74ec6"
 dependencies = [
  "bincode",
  "bitflags 1.3.2",
- "fancy-regex",
- "flate2",
  "fnv",
  "once_cell",
  "onig",

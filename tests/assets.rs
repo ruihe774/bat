@@ -5,7 +5,7 @@ use bat::assets::HighlightingAssets;
 #[test]
 #[ignore]
 fn all_themes_are_present() {
-    let assets = HighlightingAssets::from_binary();
+    let assets = HighlightingAssets::with_no_cache();
 
     let mut themes: Vec<_> = assets.themes().collect();
     themes.sort_unstable();

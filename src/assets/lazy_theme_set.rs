@@ -31,11 +31,10 @@ struct LazyTheme {
 impl LazyThemeSet {
     /// Lazily load the given theme
     pub fn get(&self, name: &str) -> Option<&Theme> {
-        self.themes.get(name).and_then(|lazy_theme| {
+        self.themes.get(name).map(|lazy_theme| {
             lazy_theme
                 .deserialized
-                .get_or_try_init(|| lazy_theme.deserialize())
-                .ok()
+                .get_or_init(|| lazy_theme.deserialize().unwrap())
         })
     }
 
@@ -47,11 +46,7 @@ impl LazyThemeSet {
 
 impl LazyTheme {
     fn deserialize(&self) -> Result<Theme> {
-        asset_from_contents(
-            &self.serialized[..],
-            "lazy-loaded theme",
-            COMPRESS_LAZY_THEMES,
-        )
+        asset_from_contents(&self.serialized[..], "lazy-loaded theme")
     }
 }
 
@@ -90,7 +85,7 @@ impl TryFrom<ThemeSet> for LazyThemeSet {
                 serialized: crate::assets::build_assets::asset_to_contents(
                     &theme,
                     &format!("theme {}", name),
-                    COMPRESS_LAZY_THEMES,
+                    false
                 )?,
                 deserialized: OnceCell::new(),
             };

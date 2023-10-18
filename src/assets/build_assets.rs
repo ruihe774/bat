@@ -11,18 +11,16 @@ mod acknowledgements;
 
 pub fn build(
     source_dir: &Path,
-    include_integrated_assets: bool,
-    include_acknowledgements: bool,
     target_dir: &Path,
     current_version: &str,
 ) -> Result<()> {
-    let theme_set = build_theme_set(source_dir, include_integrated_assets)?;
+    let theme_set = build_theme_set(source_dir)?;
 
-    let syntax_set_builder = build_syntax_set_builder(source_dir, include_integrated_assets)?;
+    let syntax_set_builder = build_syntax_set_builder(source_dir)?;
 
     let syntax_set = syntax_set_builder.build();
 
-    let acknowledgements = build_acknowledgements(source_dir, include_acknowledgements)?;
+    let acknowledgements = build_acknowledgements(source_dir)?;
 
     print_unlinked_contexts(&syntax_set);
 
@@ -35,12 +33,8 @@ pub fn build(
     )
 }
 
-fn build_theme_set(source_dir: &Path, include_integrated_assets: bool) -> Result<LazyThemeSet> {
-    let mut theme_set = if include_integrated_assets {
-        crate::assets::get_integrated_themeset().try_into()?
-    } else {
-        ThemeSet::new()
-    };
+fn build_theme_set(source_dir: &Path) -> Result<LazyThemeSet> {
+    let mut theme_set = ThemeSet::new();
 
     let theme_dir = source_dir.join("themes");
     if theme_dir.exists() {
@@ -64,15 +58,11 @@ fn build_theme_set(source_dir: &Path, include_integrated_assets: bool) -> Result
 
 fn build_syntax_set_builder(
     source_dir: &Path,
-    include_integrated_assets: bool,
 ) -> Result<SyntaxSetBuilder> {
-    let mut syntax_set_builder = if !include_integrated_assets {
+    let mut syntax_set_builder = {
         let mut builder = syntect::parsing::SyntaxSetBuilder::new();
         builder.add_plain_text_syntax();
         builder
-    } else {
-        from_binary::<SyntaxSet>(get_serialized_integrated_syntaxset(), COMPRESS_SYNTAXES)
-            .into_builder()
     };
 
     let syntax_dir = source_dir.join("syntaxes");
@@ -110,13 +100,11 @@ fn write_assets(
         theme_set,
         &target_dir.join("themes.gz"),
         "theme set",
-        COMPRESS_THEMES,
     )?;
     asset_to_cache(
         syntax_set,
         &target_dir.join("syntaxes.gz"),
         "syntax set",
-        COMPRESS_SYNTAXES,
     )?;
 
     if let Some(acknowledgements) = acknowledgements {
@@ -124,7 +112,6 @@ fn write_assets(
             acknowledgements,
             &target_dir.join("acknowledgements.gz"),
             "acknowledgements",
-            COMPRESS_ACKNOWLEDGEMENTS,
         )?;
     }
 
@@ -146,7 +133,7 @@ pub(crate) fn asset_to_contents<T: serde::Serialize>(
     let mut contents = vec![];
     if compressed {
         bincode::serialize_into(
-            flate2::write::ZlibEncoder::new(&mut contents, flate2::Compression::best()),
+            flate2::write::GzEncoder::new(&mut contents, flate2::Compression::best()),
             asset,
         )
     } else {
@@ -160,10 +147,9 @@ fn asset_to_cache<T: serde::Serialize>(
     asset: &T,
     path: &Path,
     description: &str,
-    compressed: bool,
 ) -> Result<()> {
     print!("Writing {} to {} ... ", description, path.to_string_lossy());
-    let contents = asset_to_contents(asset, description, compressed)?;
+    let contents = asset_to_contents(asset, description, true)?;
     std::fs::write(path, &contents[..]).map_err(|_| {
         format!(
             "Could not save {} to {}",

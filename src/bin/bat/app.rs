@@ -280,7 +280,6 @@ impl App {
                 .map(LineRanges::from)
                 .map(HighlightedLineRanges)
                 .unwrap_or_default(),
-            use_custom_assets: !self.matches.get_flag("no-custom-assets"),
             #[cfg(feature = "lessopen")]
             use_lessopen: self.matches.get_flag("lessopen"),
         })

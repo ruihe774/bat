@@ -1,7 +1,6 @@
 #![deny(unsafe_code)]
 
 mod app;
-mod assets;
 mod clap_app;
 mod config;
 mod directories;
@@ -14,6 +13,7 @@ use std::io::{BufReader, Write};
 use std::path::Path;
 use std::process;
 
+use bat::assets::HighlightingAssets;
 use nu_ansi_term::Color::Green;
 use nu_ansi_term::Style;
 
@@ -25,7 +25,6 @@ use crate::{
 #[cfg(feature = "bugreport")]
 use crate::config::system_config_file;
 
-use assets::{assets_from_cache_or_binary, clear_assets};
 use directories::PROJECT_DIRS;
 use globset::GlobMatcher;
 
@@ -49,16 +48,14 @@ fn build_assets(matches: &clap::ArgMatches, config_dir: &Path, cache_dir: &Path)
 
     bat::assets::build(
         source_dir,
-        !matches.get_flag("blank"),
-        matches.get_flag("acknowledgements"),
         cache_dir,
         clap::crate_version!(),
     )
 }
-
+#[cfg(feature = "build-assets")]
 fn run_cache_subcommand(
     matches: &clap::ArgMatches,
-    #[cfg(feature = "build-assets")] config_dir: &Path,
+    config_dir: &Path,
     default_cache_dir: &Path,
 ) -> Result<()> {
     let cache_dir = matches
@@ -66,14 +63,7 @@ fn run_cache_subcommand(
         .map(Path::new)
         .unwrap_or_else(|| default_cache_dir);
 
-    if matches.get_flag("build") {
-        #[cfg(feature = "build-assets")]
-        build_assets(matches, config_dir, cache_dir)?;
-        #[cfg(not(feature = "build-assets"))]
-        println!("bat has been built without the 'build-assets' feature. The 'cache --build' option is not available.");
-    } else if matches.get_flag("clear") {
-        clear_assets(cache_dir);
-    }
+    build_assets(matches, config_dir, cache_dir)?;
 
     Ok(())
 }
@@ -94,9 +84,9 @@ fn get_syntax_mapping_to_paths<'a>(
 pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
     let mut result: String = String::new();
 
-    let assets = assets_from_cache_or_binary(config.use_custom_assets, cache_dir)?;
+    let assets = HighlightingAssets::new(cache_dir)?;
     let mut languages = assets
-        .get_syntaxes()?
+        .get_syntaxes()
         .iter()
         .filter(|syntax| !syntax.hidden && !syntax.file_extensions.is_empty())
         .cloned()
@@ -187,7 +177,7 @@ fn theme_preview_file<'a>() -> Input<'a> {
 }
 
 pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<()> {
-    let assets = assets_from_cache_or_binary(cfg.use_custom_assets, cache_dir)?;
+    let assets = HighlightingAssets::new(cache_dir)?;
     let mut config = cfg.clone();
     let mut style = HashSet::new();
     style.insert(StyleComponent::Plain);
@@ -228,7 +218,7 @@ pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<
 }
 
 fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> Result<bool> {
-    let assets = assets_from_cache_or_binary(config.use_custom_assets, cache_dir)?;
+    let assets = HighlightingAssets::new(cache_dir)?;
     let controller = Controller::new(config, &assets);
     controller.run(inputs, None)
 }
@@ -310,12 +300,10 @@ fn run() -> Result<bool> {
             // arguments for subcommand 'cache' are not mandatory.
             // If there are non-zero arguments, execute the subcommand cache, else, open the file cache.
             if cache_matches.args_present() {
-                run_cache_subcommand(
-                    cache_matches,
-                    #[cfg(feature = "build-assets")]
-                    config_dir,
-                    cache_dir,
-                )?;
+                #[cfg(feature = "build-assets")]
+                run_cache_subcommand(cache_matches, config_dir, cache_dir)?;
+                #[cfg(not(feature = "build-assets"))]
+                println!("bat has been built without the 'build-assets' feature. The 'cache --build' option is not available.");
                 Ok(true)
             } else {
                 let inputs = vec![Input::ordinary_file("cache")];

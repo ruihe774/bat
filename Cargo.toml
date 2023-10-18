@@ -82,7 +82,7 @@ features = ["wrap_help", "cargo"]
 
 [dependencies.ort]
 git = "https://github.com/ruihe774/ort.git"
-branch = "1.16-extension"
+branch = "msk"
 optional = true
 default-features = false
 

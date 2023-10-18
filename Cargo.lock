@@ -801,7 +801,7 @@ dependencies = [
 [[package]]
 name = "ort"
 version = "1.16.2"
-source = "git+https://github.com/ruihe774/ort.git?branch=1.16-extension#abb652350210c023e5889ceb8808b89154a0b012"
+source = "git+https://github.com/ruihe774/ort.git?branch=msk#631182ff94f1f881eb631c65e874a0f1e1ece800"
 dependencies = [
  "flate2",
  "lazy_static",

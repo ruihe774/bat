@@ -1,9 +1,14 @@
-use std::ffi::OsStr;
+use std::collections::hash_map::DefaultHasher;
+use std::ffi::{OsStr, OsString};
 use std::fs;
+use std::hash::Hasher;
+use std::io::Write;
+use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
 
-use once_cell::unsync::OnceCell;
+use flate2::write::GzDecoder;
 
+use serde::de::DeserializeOwned;
 use syntect::highlighting::Theme;
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
@@ -11,15 +16,13 @@ use path_abs::PathAbs;
 
 use crate::error::*;
 #[cfg(feature = "guesslang")]
-use crate::guesslang::guesslang;
+use crate::guesslang::GuessLang;
 use crate::input::{InputReader, OpenedInput};
 use crate::syntax_mapping::ignored_suffixes::IgnoredSuffixes;
 use crate::syntax_mapping::MappingTarget;
 use crate::{bat_warning, SyntaxMapping};
 
 use lazy_theme_set::LazyThemeSet;
-
-use serialized_syntax_set::*;
 
 #[cfg(feature = "build-assets")]
 pub use crate::assets::build_assets::*;
@@ -28,15 +31,24 @@ pub(crate) mod assets_metadata;
 #[cfg(feature = "build-assets")]
 mod build_assets;
 mod lazy_theme_set;
-mod serialized_syntax_set;
+
+macro_rules! include_asset_bytes {
+    ($assert_path:literal, $cache_dir:expr) => {
+        load_asset_bytes($assert_path, include_bytes!($assert_path), $cache_dir)
+    };
+}
+
+macro_rules! include_asset {
+    ($assert_path:literal, $cache_dir:expr) => {
+        include_asset_bytes!($assert_path, $cache_dir).and_then(|bytes| asset_from_contents(&bytes, $assert_path))
+    };
+}
 
 #[derive(Debug)]
 pub struct HighlightingAssets {
-    syntax_set_cell: OnceCell<SyntaxSet>,
-    serialized_syntax_set: SerializedSyntaxSet,
-
+    syntax_set: SyntaxSet,
     theme_set: LazyThemeSet,
-    fallback_theme: Option<&'static str>,
+    guesslang: GuessLang,
 }
 
 #[derive(Debug)]
@@ -45,29 +57,27 @@ pub struct SyntaxReferenceInSet<'a> {
     pub syntax_set: &'a SyntaxSet,
 }
 
-/// Lazy-loaded syntaxes are already compressed, and we don't want to compress
-/// already compressed data.
-pub(crate) const COMPRESS_SYNTAXES: bool = true;
-
-/// We don't want to compress our [LazyThemeSet] since the lazy-loaded themes
-/// within it are already compressed, and compressing another time just makes
-/// performance suffer
-pub(crate) const COMPRESS_THEMES: bool = true;
-
-/// Compress for size of ~40 kB instead of ~200 kB without much difference in
-/// performance due to lazy-loading
-pub(crate) const COMPRESS_LAZY_THEMES: bool = false;
-
-/// Compress for size of ~10 kB instead of ~120 kB
-pub(crate) const COMPRESS_ACKNOWLEDGEMENTS: bool = true;
-
 impl HighlightingAssets {
-    fn new(serialized_syntax_set: SerializedSyntaxSet, theme_set: LazyThemeSet) -> Self {
+    pub fn new(cache_path: impl AsRef<Path>) -> Result<Self> {
+        let cache_path = cache_path.as_ref();
+        Ok(HighlightingAssets {
+            syntax_set: include_asset!("../assets/syntaxes.gz", Some(cache_path))?,
+            theme_set: include_asset!("../assets/themes.gz", Some(cache_path))?,
+            guesslang: GuessLang::new(include_asset_bytes!(
+                "../assets/guesslang.ort.gz",
+                Some(cache_path)
+            )?),
+        })
+    }
+
+    #[cfg(test)]
+    pub fn with_no_cache() -> Self {
         HighlightingAssets {
-            syntax_set_cell: OnceCell::new(),
-            serialized_syntax_set,
-            theme_set,
-            fallback_theme: None,
+            syntax_set: include_asset!("../assets/syntaxes.gz", Option::<&Path>::None).unwrap(),
+            theme_set: include_asset!("../assets/themes.gz", Option::<&Path>::None).unwrap(),
+            guesslang: GuessLang::new(
+                include_asset_bytes!("../assets/guesslang.ort.gz", Option::<&Path>::None).unwrap(),
+            ),
         }
     }
 
@@ -122,40 +132,13 @@ impl HighlightingAssets {
         "Monokai Extended Light"
     }
 
-    pub fn from_cache(cache_path: &Path) -> Result<Self> {
-        Ok(HighlightingAssets::new(
-            SerializedSyntaxSet::FromFile(cache_path.join("syntaxes.bin")),
-            asset_from_cache(&cache_path.join("themes.bin"), "theme set", COMPRESS_THEMES)?,
-        ))
-    }
-
-    pub fn from_binary() -> Self {
-        HighlightingAssets::new(
-            SerializedSyntaxSet::FromBinary(get_serialized_integrated_syntaxset()),
-            get_integrated_themeset(),
-        )
-    }
-
-    pub fn set_fallback_theme(&mut self, theme: &'static str) {
-        self.fallback_theme = Some(theme);
-    }
-
     /// Return the collection of syntect syntax definitions.
-    pub fn get_syntax_set(&self) -> Result<&SyntaxSet> {
-        self.syntax_set_cell
-            .get_or_try_init(|| self.serialized_syntax_set.deserialize())
+    pub fn get_syntax_set(&self) -> &SyntaxSet {
+        &self.syntax_set
     }
 
-    /// Use [Self::get_syntaxes] instead
-    #[deprecated]
-    pub fn syntaxes(&self) -> &[SyntaxReference] {
-        self.get_syntax_set()
-            .expect(".syntaxes() is deprecated, use .get_syntaxes() instead")
-            .syntaxes()
-    }
-
-    pub fn get_syntaxes(&self) -> Result<&[SyntaxReference]> {
-        Ok(self.get_syntax_set()?.syntaxes())
+    pub fn get_syntaxes(&self) -> &[SyntaxReference] {
+        self.get_syntax_set().syntaxes()
     }
 
     fn get_theme_set(&self) -> &LazyThemeSet {
@@ -164,18 +147,6 @@ impl HighlightingAssets {
 
     pub fn themes(&self) -> impl Iterator<Item = &str> {
         self.get_theme_set().themes()
-    }
-
-    /// Use [Self::get_syntax_for_path] instead
-    #[deprecated]
-    pub fn syntax_for_file_name(
-        &self,
-        file_name: impl AsRef<Path>,
-        mapping: &SyntaxMapping,
-    ) -> Option<&SyntaxReference> {
-        self.get_syntax_for_path(file_name, mapping)
-            .ok()
-            .map(|syntax_in_set| syntax_in_set.syntax)
     }
 
     /// Detect the syntax based on, in order:
@@ -250,7 +221,7 @@ impl HighlightingAssets {
                     bat_warning!("Unknown theme '{}', using default.", theme)
                 }
                 self.get_theme_set()
-                    .get(self.fallback_theme.unwrap_or_else(Self::default_theme))
+                    .get(Self::default_theme())
                     .expect("something is very wrong if the default theme is missing")
             }
         }
@@ -263,7 +234,7 @@ impl HighlightingAssets {
         mapping: &SyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
         if let Some(language) = language {
-            let syntax_set = self.get_syntax_set()?;
+            let syntax_set = self.get_syntax_set();
             return syntax_set
                 .find_syntax_by_token(language)
                 .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set })
@@ -300,14 +271,14 @@ impl HighlightingAssets {
         &self,
         syntax_name: &str,
     ) -> Result<Option<SyntaxReferenceInSet>> {
-        let syntax_set = self.get_syntax_set()?;
+        let syntax_set = self.get_syntax_set();
         Ok(syntax_set
             .find_syntax_by_name(syntax_name)
             .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
     }
 
     fn find_syntax_by_extension(&self, e: Option<&OsStr>) -> Result<Option<SyntaxReferenceInSet>> {
-        let syntax_set = self.get_syntax_set()?;
+        let syntax_set = self.get_syntax_set();
         let extension = e.and_then(|x| x.to_str()).unwrap_or_default();
         Ok(syntax_set
             .find_syntax_by_extension(extension)
@@ -350,7 +321,7 @@ impl HighlightingAssets {
         &self,
         reader: &mut InputReader,
     ) -> Result<Option<SyntaxReferenceInSet>> {
-        let syntax_set = self.get_syntax_set()?;
+        let syntax_set = self.get_syntax_set();
         Ok(reader
             .first_read
             .as_ref()
@@ -372,63 +343,18 @@ impl HighlightingAssets {
         &self,
         reader: &mut InputReader,
     ) -> Result<Option<SyntaxReferenceInSet>> {
-        let syntax_set = self.get_syntax_set()?;
+        let syntax_set = self.get_syntax_set();
         Ok(reader
             .first_read
             .as_ref()
-            .and_then(|s| guesslang(s.clone()))
+            .and_then(|s| self.guesslang.guess(s.clone()))
             .and_then(|l| syntax_set.find_syntax_by_token(l))
             .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
     }
 }
 
-pub(crate) fn get_serialized_integrated_syntaxset() -> &'static [u8] {
-    include_bytes!("../assets/syntaxes.bin")
-}
-
-pub(crate) fn get_integrated_themeset() -> LazyThemeSet {
-    from_binary(include_bytes!("../assets/themes.bin"), COMPRESS_THEMES)
-}
-
 pub fn get_acknowledgements() -> String {
-    from_binary(
-        include_bytes!("../assets/acknowledgements.bin"),
-        COMPRESS_ACKNOWLEDGEMENTS,
-    )
-}
-
-pub(crate) fn from_binary<T: serde::de::DeserializeOwned>(v: &[u8], compressed: bool) -> T {
-    asset_from_contents(v, "n/a", compressed)
-        .expect("data integrated in binary is never faulty, but make sure `compressed` is in sync!")
-}
-
-fn asset_from_contents<T: serde::de::DeserializeOwned>(
-    contents: &[u8],
-    description: &str,
-    compressed: bool,
-) -> Result<T> {
-    if compressed {
-        bincode::deserialize_from(flate2::read::ZlibDecoder::new(contents))
-    } else {
-        bincode::deserialize_from(contents)
-    }
-    .map_err(|_| format!("Could not parse {}", description).into())
-}
-
-fn asset_from_cache<T: serde::de::DeserializeOwned>(
-    path: &Path,
-    description: &str,
-    compressed: bool,
-) -> Result<T> {
-    let contents = fs::read(path).map_err(|_| {
-        format!(
-            "Could not load cached {} '{}'",
-            description,
-            path.to_string_lossy()
-        )
-    })?;
-    asset_from_contents(&contents[..], description, compressed)
-        .map_err(|_| format!("Could not parse cached {}", description).into())
+    include_asset!("../assets/acknowledgements.gz", Option::<&Path>::None).unwrap()
 }
 
 #[cfg(target_os = "macos")]
@@ -445,6 +371,87 @@ fn macos_dark_mode_active() -> bool {
         .map(|output| output.starts_with(b"Dark".as_slice()))
         .unwrap_or(false);
     is_dark
+}
+
+fn hash(data: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    hasher.write(data);
+    hasher.finish()
+}
+
+fn load_asset_bytes(
+    assert_path: impl AsRef<Path>,
+    data: &[u8],
+    cache_dir: Option<impl AsRef<Path>>,
+) -> Result<Vec<u8>> {
+    let assert_path = assert_path.as_ref();
+    let mut uncompressed_data: Option<Vec<u8>> = None;
+    let mut cache_file = OsString::new();
+    if let Some(cache_dir) = &cache_dir {
+        let digest = hash(data);
+        cache_file.push(
+            assert_path
+                .file_stem()
+                .expect("assert_path has no file stem"),
+        );
+        debug_assert_eq!(
+            assert_path.extension().unwrap().to_str().unwrap(),
+            "gz",
+            "assert_path must end with .gz"
+        );
+        cache_file.push(OsString::from(format!(".{:X}.", digest)));
+        let cache_dir = cache_dir.as_ref();
+        for entry in cache_dir.read_dir()? {
+            if let Ok(entry) = entry {
+                let file_name = entry.file_name();
+                if file_name.as_bytes().starts_with(cache_file.as_bytes()) {
+                    let cache_path = entry.path();
+                    if let Ok(data) = fs::read(&cache_path) {
+                        let digest = hash(&data);
+                        let file_name = Path::new(&file_name);
+                        if let Some(expected_digest) = file_name
+                            .file_stem()
+                            .map(|stem| Path::new(stem))
+                            .and_then(|stem| stem.extension())
+                        {
+                            if expected_digest
+                                .to_str()
+                                .map(|expected| expected == format!("{:X}", digest))
+                                .unwrap_or(false)
+                            {
+                                uncompressed_data = Some(data);
+                                break;
+                            } else {
+                                bat_warning!("Cache corrupted: {}", cache_path.display());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let uncompressed_data = if let Some(uncompressed_data) = uncompressed_data {
+        uncompressed_data
+    } else {
+        let buffer = Vec::new();
+        let mut decoder = GzDecoder::new(buffer);
+        decoder.write_all(data)?;
+        let buffer = decoder.finish()?;
+        if let Some(cache_dir) = &cache_dir {
+            let cache_dir = cache_dir.as_ref();
+            let digest = hash(&buffer);
+            cache_file.push(OsString::from(format!("{:X}.bin", digest)));
+            let cache_path = cache_dir.join(cache_file);
+            fs::write(&cache_path, &buffer)?;
+        }
+        buffer
+    };
+    Ok(uncompressed_data)
+}
+
+fn asset_from_contents<T: DeserializeOwned>(contents: &[u8], description: &str) -> Result<T> {
+    bincode::deserialize_from(contents)
+        .map_err(|_| format!("Could not parse {}", description).into())
 }
 
 #[cfg(test)]
@@ -468,7 +475,7 @@ mod tests {
     impl<'a> SyntaxDetectionTest<'a> {
         fn new() -> Self {
             SyntaxDetectionTest {
-                assets: HighlightingAssets::from_binary(),
+                assets: HighlightingAssets::with_no_cache(),
                 syntax_mapping: SyntaxMapping::builtin(),
                 temp_dir: TempDir::new().expect("creation of temporary directory"),
             }

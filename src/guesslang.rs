@@ -1,9 +1,10 @@
-use std::cmp::Ordering;
+use std::cell::RefCell;
 use std::sync::Arc;
+use std::{cmp::Ordering, fmt::Debug};
 
 use ndarray::{Array0, CowArray};
 use once_cell::sync::OnceCell;
-use ort::{tensor::OrtOwnedTensor, Environment, InMemorySession, SessionBuilder, Value};
+use ort::{tensor::OrtOwnedTensor, Environment, OwnedInMemorySession, SessionBuilder, Value};
 
 const LABELS: [&str; 54] = [
     "asm",
@@ -62,36 +63,57 @@ const LABELS: [&str; 54] = [
     "yaml",
 ];
 
-static ENVIRONMENT: OnceCell<Arc<Environment>> = OnceCell::new();
-static SESSION: OnceCell<InMemorySession> = OnceCell::new();
+#[derive(Debug)]
+pub(crate) struct GuessLang {
+    environment: OnceCell<Arc<Environment>>,
+    session: OnceCell<OwnedInMemorySession>,
+    model: RefCell<Option<Vec<u8>>>,
+}
 
-pub(crate) fn guesslang(t: String) -> Option<&'static str> {
-    let environment = ENVIRONMENT.get_or_init(|| Environment::default().into_arc());
-    let session = SESSION
-        .get_or_try_init(|| {
-            SessionBuilder::new(environment)?
-                .with_enable_ort_custom_ops()?
-                .with_model_from_memory(include_bytes!("../assets/guesslang.ort"))
-        })
-        .expect("failed to init guesslang session");
+impl GuessLang {
+    pub fn new(model: Vec<u8>) -> GuessLang {
+        GuessLang {
+            environment: OnceCell::new(),
+            session: OnceCell::new(),
+            model: RefCell::new(Some(model)),
+        }
+    }
 
-    let input = CowArray::from(Array0::from_elem((), t)).into_dyn();
-    let inputs = vec![Value::from_array(session.allocator(), &input)
-        .expect("failed to alloc guesslang model input")];
-    let outputs = match session.run(inputs) {
-        Ok(r) => r,
-        Err(_) => return None, // the model may error with very short input
-    };
-    let output: OrtOwnedTensor<f32, _> = outputs[0]
-        .try_extract()
-        .expect("failed to extract guesslang output");
-    let output = output.view();
-    let (index, prob) = output
-        .iter()
-        .cloned()
-        .enumerate()
-        .max_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Equal))
-        .unwrap();
-    let lang = LABELS[index];
-    return if prob > 0.5 { Some(lang) } else { None };
+    pub fn guess(&self, t: String) -> Option<&'static str> {
+        let environment = self
+            .environment
+            .get_or_init(|| Environment::default().into_arc());
+        let session = self
+            .session
+            .get_or_try_init(|| {
+                SessionBuilder::new(environment)?
+                    .with_enable_ort_custom_ops()?
+                    .with_model_from_owned_memory(self.model.take().unwrap())
+            })
+            .expect("failed to init guesslang session");
+
+        let input = CowArray::from(Array0::from_elem((), t)).into_dyn();
+        let inputs = vec![Value::from_array(session.allocator(), &input)
+            .expect("failed to alloc guesslang model input")];
+        let outputs = match session.run(inputs) {
+            Ok(r) => r,
+            Err(_) => return None, // the model may error with very short input
+        };
+        let output: OrtOwnedTensor<f32, _> = outputs[0]
+            .try_extract()
+            .expect("failed to extract guesslang output");
+        let output = output.view();
+        let (index, prob) = output
+            .iter()
+            .cloned()
+            .enumerate()
+            .max_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Equal))
+            .unwrap();
+        let lang = LABELS[index];
+        if prob > 0.5 {
+            Some(lang)
+        } else {
+            None
+        }
+    }
 }

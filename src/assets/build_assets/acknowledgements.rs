@@ -17,12 +17,7 @@ struct PathAndStem {
 /// used in the output to `--acknowledgements`
 pub fn build_acknowledgements(
     source_dir: &Path,
-    include_acknowledgements: bool,
 ) -> Result<Option<String>> {
-    if !include_acknowledgements {
-        return Ok(None);
-    }
-
     let mut acknowledgements = format!("{}\n\n", include_str!("../../../NOTICE"));
 
     // Sort entries so the order is stable over time

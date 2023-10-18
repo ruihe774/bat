@@ -45,22 +45,22 @@ pub struct PrettyPrinter<'a> {
 }
 
 impl<'a> PrettyPrinter<'a> {
-    pub fn new() -> Self {
+    pub fn new(cache_path: impl AsRef<Path>) -> Result<Self> {
         let config = Config {
             colored_output: true,
             true_color: true,
             ..Default::default()
         };
 
-        PrettyPrinter {
+        Ok(PrettyPrinter {
             inputs: vec![],
             config,
-            assets: HighlightingAssets::from_binary(),
+            assets: HighlightingAssets::new(cache_path)?,
 
             highlighted_lines: vec![],
             term_width: None,
             active_style_components: ActiveStyleComponents::default(),
-        }
+        })
     }
 
     /// Add an input which should be pretty-printed
@@ -251,7 +251,6 @@ impl<'a> PrettyPrinter<'a> {
         // be valid, so get_syntaxes() can never fail here
         self.assets
             .get_syntaxes()
-            .unwrap()
             .iter()
             .filter(|s| !s.hidden)
             .map(|s| Syntax {
@@ -301,12 +300,6 @@ impl<'a> PrettyPrinter<'a> {
         // Run the controller
         let controller = Controller::new(&self.config, &self.assets);
         controller.run(inputs.into_iter().map(|i| i.into()).collect(), None)
-    }
-}
-
-impl Default for PrettyPrinter<'_> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

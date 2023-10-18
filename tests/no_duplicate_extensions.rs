@@ -22,7 +22,7 @@ fn no_duplicate_extensions() {
         "v",
     ];
 
-    let assets = HighlightingAssets::from_binary();
+    let assets = HighlightingAssets::with_no_cache();
 
     let mut extensions = HashSet::new();
 

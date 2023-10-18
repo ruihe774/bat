@@ -92,10 +92,6 @@ branch = "1.16-extension"
 optional = true
 default-features = false
 
-[target.'cfg(target_os = "macos")'.dependencies]
-home = "0.5.4"
-plist = "1.4.3"
-
 [dev-dependencies]
 assert_cmd = "2.0.10"
 expect-test = "1.4.1"

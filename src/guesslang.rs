@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::{cmp::Ordering, fmt::Debug};
 
 use ndarray::{Array0, CowArray};
-use once_cell::sync::OnceCell;
+use once_cell::unsync::OnceCell;
 use ort::{tensor::OrtOwnedTensor, Environment, OwnedInMemorySession, SessionBuilder, Value};
 
 const LABELS: [&str; 54] = [

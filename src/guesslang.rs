@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::sync::Arc;
 use std::{cmp::Ordering, fmt::Debug};
 
@@ -63,11 +63,10 @@ const LABELS: [&str; 54] = [
     "yaml",
 ];
 
-#[derive(Debug)]
 pub(crate) struct GuessLang {
     environment: OnceCell<Arc<Environment>>,
     session: OnceCell<OwnedInMemorySession>,
-    model: RefCell<Option<Vec<u8>>>,
+    model: Cell<Vec<u8>>,
 }
 
 impl GuessLang {
@@ -75,7 +74,7 @@ impl GuessLang {
         GuessLang {
             environment: OnceCell::new(),
             session: OnceCell::new(),
-            model: RefCell::new(Some(model)),
+            model: Cell::new(model),
         }
     }
 
@@ -88,11 +87,11 @@ impl GuessLang {
             .get_or_try_init(|| {
                 SessionBuilder::new(environment)?
                     .with_enable_ort_custom_ops()?
-                    .with_model_from_owned_memory(self.model.take().unwrap())
+                    .with_model_from_owned_memory(self.model.take())
             })
             .expect("failed to init guesslang session");
 
-        t.truncate(10000);  // this is maximum of model input
+        t.truncate(10000); // this is maximum of model input
         let input = CowArray::from(Array0::from_elem((), t)).into_dyn();
         let inputs = vec![Value::from_array(session.allocator(), &input)
             .expect("failed to alloc guesslang model input")];
@@ -116,5 +115,11 @@ impl GuessLang {
         } else {
             None
         }
+    }
+}
+
+impl Debug for GuessLang {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("GuessLang {}")
     }
 }

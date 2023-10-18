@@ -31,8 +31,8 @@ pub(crate) mod assets_metadata;
 mod build_assets;
 mod lazy_theme_set;
 
-const SYNTAXES_DIGEST: u32 = 0xcb61a0a1;
-const THEMES_DIGEST: u32 = 0x802cbbf5;
+const SYNTAXES_DIGEST: u32 = 0xc9b78c11;
+const THEMES_DIGEST: u32 = 0xcbe0f0d9;
 const GUESSLANG_DIGEST: u32 = 0x668e6dc7;
 const ACKNOWLEDGEMENTS_DIGEST: u32 = 0xc9e927bb;
 

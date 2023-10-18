@@ -38,7 +38,7 @@ const LABELS: [&str; 54] = [
     "lua",
     "makefile",
     "md",
-    "matla",
+    "matlab",
     "mm",
     "ml",
     "pas",
@@ -48,7 +48,7 @@ const LABELS: [&str; 54] = [
     "prolog",
     "py",
     "r",
-    "r",
+    "rb",
     "rs",
     "scala",
     "sh",
@@ -79,7 +79,7 @@ impl GuessLang {
         }
     }
 
-    pub fn guess(&self, t: String) -> Option<&'static str> {
+    pub fn guess(&self, mut t: String) -> Option<&'static str> {
         let environment = self
             .environment
             .get_or_init(|| Environment::default().into_arc());
@@ -92,6 +92,7 @@ impl GuessLang {
             })
             .expect("failed to init guesslang session");
 
+        t.truncate(10000);  // this is maximum of model input
         let input = CowArray::from(Array0::from_elem((), t)).into_dyn();
         let inputs = vec![Value::from_array(session.allocator(), &input)
             .expect("failed to alloc guesslang model input")];

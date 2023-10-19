@@ -76,7 +76,7 @@ pub struct Config<'a> {
     pub theme: String,
 
     /// File extension/name mappings
-    pub syntax_mapping: SyntaxMapping<'a>,
+    pub syntax_mapping: SyntaxMapping,
 
     /// Command to start the pager
     pub pager: Option<&'a str>,

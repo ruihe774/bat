@@ -45,7 +45,6 @@ paging = [
 # Support $LESSOPEN preprocessor
 lessopen = [
     "run_script",
-    "os_str_bytes",
 ]
 
 # Support guesslang
@@ -72,6 +71,7 @@ content_inspector = "0.2"
 globset = "0.4"
 nu-ansi-term = "0.49"
 once_cell = "1.18"
+os_str_bytes = "~6.4"
 serde_yaml = "0.9"
 thiserror = "1.0"
 unicode-width = "0.1"
@@ -90,10 +90,6 @@ optional = true
 
 [dependencies.ndarray]
 version = "0.15"
-optional = true
-
-[dependencies.os_str_bytes]
-version = "6.4"
 optional = true
 
 [dependencies.regex]

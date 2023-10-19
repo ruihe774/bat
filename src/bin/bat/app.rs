@@ -20,7 +20,7 @@ use bat::{
     input::Input,
     line_range::{HighlightedLineRanges, LineRange, LineRanges},
     style::{StyleComponent, StyleComponents},
-    MappingTarget, NonprintableNotation, PagingMode, SyntaxMapping, WrappingMode,
+    NonprintableNotation, PagingMode, SyntaxMapping, WrappingMode,
 };
 
 fn is_truecolor_terminal() -> bool {
@@ -117,25 +117,25 @@ impl App {
             _ => unreachable!("other values for --paging are not allowed"),
         };
 
-        let mut syntax_mapping = SyntaxMapping::builtin();
+        let syntax_mapping = SyntaxMapping::builtin();
 
-        if let Some(values) = self.matches.get_many::<String>("ignored-suffix") {
-            for suffix in values {
-                syntax_mapping.insert_ignored_suffix(suffix);
-            }
-        }
+        // if let Some(values) = self.matches.get_many::<String>("ignored-suffix") {
+        //     for suffix in values {
+        //         syntax_mapping.insert_ignored_suffix(suffix);
+        //     }
+        // }
 
-        if let Some(values) = self.matches.get_many::<String>("map-syntax") {
-            for from_to in values {
-                let parts: Vec<_> = from_to.split(':').collect();
+        // if let Some(values) = self.matches.get_many::<String>("map-syntax") {
+        //     for from_to in values {
+        //         let parts: Vec<_> = from_to.split(':').collect();
 
-                if parts.len() != 2 {
-                    return Err("Invalid syntax mapping. The format of the -m/--map-syntax option is '<glob-pattern>:<syntax-name>'. For example: '*.cpp:C++'.".into());
-                }
+        //         if parts.len() != 2 {
+        //             return Err("Invalid syntax mapping. The format of the -m/--map-syntax option is '<glob-pattern>:<syntax-name>'. For example: '*.cpp:C++'.".into());
+        //         }
 
-                syntax_mapping.insert(parts[0], MappingTarget::MapTo(parts[1]))?;
-            }
-        }
+        //         syntax_mapping.insert(parts[0], MappingTarget::MapTo(parts[1]))?;
+        //     }
+        // }
 
         let maybe_term_width = self
             .matches

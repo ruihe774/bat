@@ -6,7 +6,7 @@ use ndarray::{Array0, CowArray};
 use once_cell::unsync::OnceCell;
 use ort::{tensor::OrtOwnedTensor, Environment, OwnedInMemorySession, SessionBuilder, Value};
 
-const LABELS: [&str; 54] = include!("../assets/guesslang_mapping.json");
+const LABELS: [&str; 54] = include!("../assets/guesslang_mapping.plist");
 
 pub(crate) struct GuessLang {
     environment: OnceCell<Arc<Environment>>,

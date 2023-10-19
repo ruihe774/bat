@@ -6,7 +6,7 @@ mod config;
 mod directories;
 mod input;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::io;
 use std::io::{BufReader, Write};
@@ -26,7 +26,6 @@ use crate::{
 use crate::config::system_config_file;
 
 use directories::PROJECT_DIRS;
-use globset::GlobMatcher;
 
 use bat::{
     config::Config,
@@ -34,7 +33,7 @@ use bat::{
     error::*,
     input::Input,
     style::{StyleComponent, StyleComponents},
-    MappingTarget, PagingMode,
+    PagingMode,
 };
 
 const THEME_PREVIEW_DATA: &[u8] = include_bytes!("../../../assets/theme_preview.rs");
@@ -62,19 +61,6 @@ fn run_cache_subcommand(
     build_assets(matches, config_dir, cache_dir)?;
 
     Ok(())
-}
-
-fn get_syntax_mapping_to_paths<'a>(
-    mappings: &[(GlobMatcher, MappingTarget<'a>)],
-) -> HashMap<&'a str, Vec<String>> {
-    let mut map = HashMap::new();
-    for mapping in mappings {
-        if let (matcher, MappingTarget::MapTo(s)) = mapping {
-            let globs = map.entry(*s).or_insert_with(Vec::new);
-            globs.push(matcher.glob().glob().into());
-        }
-    }
-    map
 }
 
 pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
@@ -109,14 +95,15 @@ pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
 
     languages.sort_by_key(|lang| lang.name.to_uppercase());
 
-    let configured_languages = get_syntax_mapping_to_paths(config.syntax_mapping.mappings());
+    // XXX
+    // let configured_languages = get_syntax_mapping_to_paths(config.syntax_mapping.mappings());
 
-    for lang in &mut languages {
-        if let Some(additional_paths) = configured_languages.get(lang.name.as_str()) {
-            lang.file_extensions
-                .extend(additional_paths.iter().cloned());
-        }
-    }
+    // for lang in &mut languages {
+    //     if let Some(additional_paths) = configured_languages.get(lang.name.as_str()) {
+    //         lang.file_extensions
+    //             .extend(additional_paths.iter().cloned());
+    //     }
+    // }
 
     if config.loop_through {
         for lang in languages {

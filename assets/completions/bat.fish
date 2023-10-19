@@ -1,9 +1,9 @@
 # Fish Shell Completions
-# Copy or symlink to $XDG_CONFIG_HOME/fish/completions/{{PROJECT_EXECUTABLE}}.fish
+# Copy or symlink to $XDG_CONFIG_HOME/fish/completions/bat.fish
 # ($XDG_CONFIG_HOME is usually set to ~/.config)
 
 # `bat` is `batcat` on Debian and Ubuntu
-set bat {{PROJECT_EXECUTABLE}}
+set bat bat
 
 # Helper functions:
 

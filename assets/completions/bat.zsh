@@ -1,10 +1,10 @@
-#compdef {{PROJECT_EXECUTABLE}}
+#compdef bat
 
 local context state state_descr line
 typeset -A opt_args
 
-(( $+functions[_{{PROJECT_EXECUTABLE}}_cache_subcommand] )) ||
-_{{PROJECT_EXECUTABLE}}_cache_subcommand() {
+(( $+functions[_bat_cache_subcommand] )) ||
+_bat_cache_subcommand() {
     local -a args
     args=(
         '(-b --build -c --clear)'{-b,--build}'[Initialize or update the syntax/theme cache]'
@@ -19,8 +19,8 @@ _{{PROJECT_EXECUTABLE}}_cache_subcommand() {
     _arguments -S -s $args
 }
 
-(( $+functions[_{{PROJECT_EXECUTABLE}}_main] )) ||
-_{{PROJECT_EXECUTABLE}}_main() {
+(( $+functions[_bat_main] )) ||
+_bat_main() {
     local -a args
     args=(
         '(-A --show-all)'{-A,--show-all}'[Show non-printable characters (space, tab, newline, ..)]'
@@ -63,7 +63,7 @@ _{{PROJECT_EXECUTABLE}}_main() {
         language)
             local IFS=$'\n'
             local -a languages
-            languages=( $({{PROJECT_EXECUTABLE}} --list-languages | awk -F':|,' '{ for (i = 1; i <= NF; ++i) printf("%s:%s\n", $i, $1) }') )
+            languages=( $(bat --list-languages | awk -F':|,' '{ for (i = 1; i <= NF; ++i) printf("%s:%s\n", $i, $1) }') )
 
             _describe 'language' languages
         ;;
@@ -71,7 +71,7 @@ _{{PROJECT_EXECUTABLE}}_main() {
         theme)
             local IFS=$'\n'
             local -a themes
-            themes=( $({{PROJECT_EXECUTABLE}} --list-themes | sort) )
+            themes=( $(bat --list-themes | sort) )
 
             _values 'theme' $themes
         ;;
@@ -86,10 +86,10 @@ case $words[2] in
     cache)
         ## Completion of the 'cache' command itself is removed for better UX
         ## See https://github.com/sharkdp/bat/issues/2085#issuecomment-1271646802
-        _{{PROJECT_EXECUTABLE}}_cache_subcommand
+        _bat_cache_subcommand
     ;;
 
     *)
-        _{{PROJECT_EXECUTABLE}}_main
+        _bat_main
     ;;
 esac

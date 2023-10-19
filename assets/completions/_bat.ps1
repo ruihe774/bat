@@ -2,12 +2,12 @@
 using namespace System.Management.Automation
 using namespace System.Management.Automation.Language
 
-Register-ArgumentCompleter -Native -CommandName '{{PROJECT_EXECUTABLE}}' -ScriptBlock {
+Register-ArgumentCompleter -Native -CommandName 'bat' -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
 
     $commandElements = $commandAst.CommandElements
     $command = @(
-        '{{PROJECT_EXECUTABLE}}'
+        'bat'
         for ($i = 1; $i -lt $commandElements.Count; $i++) {
             $element = $commandElements[$i]
             if ($element -isnot [StringConstantExpressionAst] -or
@@ -19,7 +19,7 @@ Register-ArgumentCompleter -Native -CommandName '{{PROJECT_EXECUTABLE}}' -Script
     }) -join ';'
 
     $completions = @(switch ($command) {
-        '{{PROJECT_EXECUTABLE}}' {
+        'bat' {
             [CompletionResult]::new('-l', 'l', [CompletionResultType]::ParameterName, 'Set the language for syntax highlighting.')
             [CompletionResult]::new('--language', 'language', [CompletionResultType]::ParameterName, 'Set the language for syntax highlighting.')
             [CompletionResult]::new('-H', 'H', [CompletionResultType]::ParameterName, 'Highlight lines N through M.')
@@ -74,7 +74,7 @@ Register-ArgumentCompleter -Native -CommandName '{{PROJECT_EXECUTABLE}}' -Script
             ## See https://github.com/sharkdp/bat/issues/2085#issuecomment-1271646802
             break
         }
-        '{{PROJECT_EXECUTABLE}};cache' {
+        'bat;cache' {
             [CompletionResult]::new('--source', 'source', [CompletionResultType]::ParameterName, 'Use a different directory to load syntaxes and themes from.')
             [CompletionResult]::new('--target', 'target', [CompletionResultType]::ParameterName, 'Use a different directory to store the cached syntax and theme set.')
             [CompletionResult]::new('-b', 'b', [CompletionResultType]::ParameterName, 'Initialize (or update) the syntax/theme cache.')

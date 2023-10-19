@@ -1,19 +1,19 @@
-.TH {{PROJECT_EXECUTABLE_UPPERCASE}} "1"
+.TH BAT "1"
 .SH NAME
-{{PROJECT_EXECUTABLE}} \- a cat(1) clone with syntax highlighting and Git integration.
+bat \- a cat(1) clone with syntax highlighting and Git integration.
 .SH "USAGE"
-.IP "{{PROJECT_EXECUTABLE}} [OPTIONS] [FILE]..."
-.IP "{{PROJECT_EXECUTABLE}} cache [CACHE-OPTIONS] [--build|--clear]
+.IP "bat [OPTIONS] [FILE]..."
+.IP "bat cache [CACHE-OPTIONS] [--build|--clear]
 .SH DESCRIPTION
-{{PROJECT_EXECUTABLE}} prints the syntax-highlighted content of a collection of FILEs to the
+bat prints the syntax-highlighted content of a collection of FILEs to the
 terminal. If no FILE is specified, or when FILE is '-', it reads from standard input.
 
-{{PROJECT_EXECUTABLE}} supports a large number of programming and markup languages.
+bat supports a large number of programming and markup languages.
 It also communicates with git(1) to show modifications with respect to the git index.
-{{PROJECT_EXECUTABLE}} automatically pipes its output through a pager (by default: less).
+bat automatically pipes its output through a pager (by default: less).
 
-Whenever the output of {{PROJECT_EXECUTABLE}} goes to a non-interactive terminal, i.e. when the
-output is piped into another process or into a file, {{PROJECT_EXECUTABLE}} will act as a drop-in
+Whenever the output of bat goes to a non-interactive terminal, i.e. when the
+output is piped into another process or into a file, bat will act as a drop-in
 replacement for cat(1) and fall back to printing the plain file contents.
 
 .SH "OPTIONS"
@@ -68,7 +68,7 @@ highlights lines 30 to 40
 .HP
 \fB\-\-file\-name\fR <name>...
 .IP
-Specify the name to display for a file. Useful when piping data to {{PROJECT_EXECUTABLE}} from STDIN when {{PROJECT_EXECUTABLE}} does not otherwise know the filename. Note that the provided file name is also used for syntax detection.
+Specify the name to display for a file. Useful when piping data to bat from STDIN when bat does not otherwise know the filename. Note that the provided file name is also used for syntax detection.
 .HP
 \fB\-d\fR, \fB\-\-diff\fR
 .IP
@@ -116,7 +116,7 @@ values: *auto*, never, always.
 \fB\-f\fR, \fB\-\-force\-colorization\fR
 .IP
 Alias for '--decorations=always --color=always'. This is useful \
-if the output of {{PROJECT_EXECUTABLE}} is piped to another program, but you want \
+if the output of bat is piped to another program, but you want \
 to keep the colorization/decorations.
 .HP
 \fB\-\-paging\fR <when>
@@ -201,28 +201,28 @@ standard input.
 .HP
 \fBcache\fR - Modify the syntax\-definition and theme cache.
 .SH "FILES"
-{{PROJECT_EXECUTABLE}} can also be customized with a configuration file. The location of the file
+bat can also be customized with a configuration file. The location of the file
 is dependent on your operating system. To get the default path for your system, call:
 
-\fB{{PROJECT_EXECUTABLE}} --config-file\fR
+\fBbat --config-file\fR
 
-Alternatively, you can use the BAT_CONFIG_PATH environment variable to point {{PROJECT_EXECUTABLE}} to a non-default
+Alternatively, you can use the BAT_CONFIG_PATH environment variable to point bat to a non-default
 location of the configuration file.
 
 To generate a default configuration file, call:
 
-\fB{{PROJECT_EXECUTABLE}} --generate-config-file\fR
+\fBbat --generate-config-file\fR
 .SH "ADDING CUSTOM LANGUAGES"
-{{PROJECT_EXECUTABLE}} supports Sublime Text \fB.sublime-syntax\fR language files, and can be
+bat supports Sublime Text \fB.sublime-syntax\fR language files, and can be
 customized to add additional languages to your local installation. To do this, add the \fB.sublime-syntax\fR language
-files to `\fB$({{PROJECT_EXECUTABLE}} --config-dir)/syntaxes\fR` and run `\fB{{PROJECT_EXECUTABLE}} cache --build\fR`.
+files to `\fB$(bat --config-dir)/syntaxes\fR` and run `\fBbat cache --build\fR`.
 
 \fBExample:\fR
 
 .RS 0.5i
-mkdir -p "$({{PROJECT_EXECUTABLE}} --config-dir)/syntaxes"
+mkdir -p "$(bat --config-dir)/syntaxes"
 .br
-cd "$({{PROJECT_EXECUTABLE}} --config-dir)/syntaxes"
+cd "$(bat --config-dir)/syntaxes"
 
 # Put new '.sublime-syntax' language definition files
 .br
@@ -232,36 +232,36 @@ git clone https://github.com/tellnobody1/sublime-purescript-syntax
 
 # And then build the cache.
 .br
-{{PROJECT_EXECUTABLE}} cache --build
+bat cache --build
 .RE
 
-Once the cache is built, the new language will be visible in `\fB{{PROJECT_EXECUTABLE}} --list-languages\fR`.
+Once the cache is built, the new language will be visible in `\fBbat --list-languages\fR`.
 .br
-If you ever want to remove the custom languages, you can clear the cache with `\fB{{PROJECT_EXECUTABLE}} cache --clear\fR`.
+If you ever want to remove the custom languages, you can clear the cache with `\fBbat cache --clear\fR`.
 
 .SH "ADDING CUSTOM THEMES"
-Similarly to custom languages, {{PROJECT_EXECUTABLE}} supports Sublime Text \fB.tmTheme\fR themes.
-These can be installed to `\fB$({{PROJECT_EXECUTABLE}} --config-dir)/themes\fR`, and are added to the cache with
-`\fB{{PROJECT_EXECUTABLE}} cache --build`.
+Similarly to custom languages, bat supports Sublime Text \fB.tmTheme\fR themes.
+These can be installed to `\fB$(bat --config-dir)/themes\fR`, and are added to the cache with
+`\fBbat cache --build`.
 
 .SH "INPUT PREPROCESSOR"
-Much like less(1) does, {{PROJECT_EXECUTABLE}} supports input preprocessors via the LESSOPEN and LESSCLOSE environment variables.
-In addition, {{PROJECT_EXECUTABLE}} attempts to be as compatible with less's preprocessor implementation as possible.
+Much like less(1) does, bat supports input preprocessors via the LESSOPEN and LESSCLOSE environment variables.
+In addition, bat attempts to be as compatible with less's preprocessor implementation as possible.
 
 To use the preprocessor, call:
 
-\fB{{PROJECT_EXECUTABLE}} --lessopen\fR
+\fBbat --lessopen\fR
 
 Alternatively, the preprocessor may be enabled by default by adding the '\-\-lessopen' option to the configuration file. 
 
 To temporarily disable the preprocessor if it is enabled by default, call:
 
-\fB{{PROJECT_EXECUTABLE}} --no-lessopen\fR
+\fBbat --no-lessopen\fR
 
 For more information, see the "INPUT PREPROCESSOR" section of less(1).  
 
 .SH "MORE INFORMATION"
 
-For more information and up-to-date documentation, visit the {{PROJECT_EXECUTABLE}} repo:
+For more information and up-to-date documentation, visit the bat repo:
 .br
 \fBhttps://github.com/sharkdp/bat\fR

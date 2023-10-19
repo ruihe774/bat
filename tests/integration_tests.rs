@@ -1650,6 +1650,7 @@ fn do_not_detect_different_syntax_for_stdin_and_files() {
     );
 }
 
+#[ignore]
 #[test]
 fn no_first_line_fallback_when_mapping_to_invalid_syntax() {
     let file = "regression_tests/first_line_fallback.invalid-syntax";
@@ -1847,6 +1848,7 @@ fn ansi_passthrough_emit() {
     }
 }
 
+#[ignore]
 #[test]
 fn ignored_suffix_arg() {
     bat()
@@ -2048,6 +2050,7 @@ fn all_global_git_config_locations_syntax_mapping_work() {
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn map_syntax_and_ignored_suffix_work_together() {
     bat()

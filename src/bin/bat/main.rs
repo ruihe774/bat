@@ -46,7 +46,7 @@ fn build_assets(matches: &clap::ArgMatches, config_dir: &Path, cache_dir: &Path)
         .map(Path::new)
         .unwrap_or_else(|| config_dir);
 
-    bat::assets::build(source_dir, cache_dir, clap::crate_version!())
+    bat::assets::build(source_dir, cache_dir)
 }
 #[cfg(feature = "build-assets")]
 fn run_cache_subcommand(

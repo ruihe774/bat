@@ -25,7 +25,6 @@ use lazy_theme_set::LazyThemeSet;
 #[cfg(feature = "build-assets")]
 pub use crate::assets::build_assets::*;
 
-pub(crate) mod assets_metadata;
 #[cfg(feature = "build-assets")]
 mod build_assets;
 mod lazy_theme_set;

@@ -424,7 +424,7 @@ mod tests {
 
     struct SyntaxDetectionTest {
         assets: HighlightingAssets,
-        pub syntax_mapping: SyntaxMapping,
+        pub syntax_mapping: SyntaxMapping<'static>,
         pub temp_dir: TempDir,
     }
 

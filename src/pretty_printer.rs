@@ -256,7 +256,7 @@ impl<'a> PrettyPrinter<'a> {
     }
 
     /// Specify custom file extension / file name to syntax mappings
-    pub fn syntax_mapping(&mut self, mapping: SyntaxMapping) -> &mut Self {
+    pub fn syntax_mapping(&mut self, mapping: SyntaxMapping<'a>) -> &mut Self {
         self.config.syntax_mapping = mapping;
         self
     }

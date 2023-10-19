@@ -9,9 +9,9 @@ use globset::{Candidate, Glob, GlobSet, GlobSetBuilder};
 use os_str_bytes::RawOsStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MappingTarget {
+pub enum MappingTarget<'a> {
     /// For mapping a path to a specific syntax.
-    MapTo(&'static str),
+    MapTo(&'a str),
 
     /// For mapping a path (typically an extension-less file name) to an unknown
     /// syntax. This typically means later using the contents of the first line
@@ -28,16 +28,16 @@ pub enum MappingTarget {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct SyntaxMapping {
-    targets: Vec<MappingTarget>,
+pub struct SyntaxMapping<'a> {
+    targets: Vec<MappingTarget<'a>>,
     globset: GlobSet,
-    ignored_suffixes: Vec<&'static str>,
+    ignored_suffixes: Vec<&'a str>,
 }
 
-impl SyntaxMapping {
+impl<'a> SyntaxMapping<'a> {
     pub fn new(
-        mapping: Vec<(Glob, MappingTarget)>,
-        ignored_suffixes: &[&'static str],
+        mapping: impl IntoIterator<Item = (Glob, MappingTarget<'a>)>,
+        ignored_suffixes: &[&'a str],
     ) -> Result<Self> {
         let mut builder = GlobSetBuilder::new();
         Ok(SyntaxMapping {
@@ -56,11 +56,9 @@ impl SyntaxMapping {
     pub fn builtin() -> Self {
         use MappingTarget::*;
         Self::new(
-            Vec::from_iter(
-                include!("../assets/syntax_mapping.plist")
-                    .into_iter()
-                    .map(|(s, t)| (Glob::new(s).expect("invalid builtin syntax mapping"), t)),
-            ),
+            include!("../assets/syntax_mapping.plist")
+                .into_iter()
+                .map(|(s, t)| (Glob::new(s).expect("invalid builtin syntax mapping"), t)),
             include!("../assets/ignored_suffixes.plist").as_slice(),
         )
         .expect("invalid builtin syntax mapping")

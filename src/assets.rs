@@ -1,5 +1,5 @@
-use std::ffi::{OsStr, OsString};
-use std::fmt::Display;
+use std::ffi::OsStr;
+use std::fmt::{Display, Write};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::Path;
@@ -399,7 +399,7 @@ fn create_asset_reader(
             "gz",
             "asset_path must end with .gz"
         );
-        cache_file.push(OsString::from(format!(".{:x}.bin", checksum)));
+        write!(&mut cache_file, ".{:x}.bin", checksum)?;
         let cache_file = cache_dir.as_ref().join(cache_file.as_os_str());
         Some(cache_file)
     } else {

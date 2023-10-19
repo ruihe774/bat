@@ -443,6 +443,7 @@ fn create_asset_reader(
             let mut decoder = GzDecoder::new(data);
             decoder.read_to_end(&mut buffer)?;
             if let Some(cache_file) = cache_file {
+                fs::create_dir_all(cache_file.parent().unwrap())?;
                 fs::write(cache_file, &buffer)?;
             }
             Box::new(io::Cursor::new(buffer))

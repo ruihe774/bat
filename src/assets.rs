@@ -1,8 +1,9 @@
+use std::env;
 use std::ffi::OsStr;
 use std::fmt::{Display, Write};
 use std::fs::{self, File};
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use flate2::bufread::GzDecoder;
 
@@ -178,12 +179,12 @@ impl HighlightingAssets {
         path: impl AsRef<Path>,
         mapping: &SyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
-        let path = path.as_ref();
+        let path = absolute_path(path)?;
 
-        let syntax_match = mapping.get_syntax_for(path);
+        let syntax_match = mapping.get_syntax_for(&path);
 
         if let Some(MappingTarget::MapToUnknown) = syntax_match {
-            return Err(Error::UndetectedSyntax(path.to_string_lossy().into()));
+            return Err(Error::UndetectedSyntax(path.as_path().to_string_lossy().into()));
         }
 
         if let Some(MappingTarget::MapTo(syntax_name)) = syntax_match {
@@ -423,6 +424,35 @@ fn asset_from_reader<T: DeserializeOwned>(
     description: impl Display,
 ) -> Result<T> {
     bincode::deserialize_from(reader).map_err(|_| format!("Could not parse {}", description).into())
+}
+
+fn absolute_path(path: impl AsRef<Path>) -> io::Result<PathBuf> {
+    let mut pathbuf = None;
+    for comp in path.as_ref().components() {
+        match comp {
+            Component::Prefix(_) | Component::RootDir => {
+                pathbuf.get_or_insert_with(PathBuf::new).push(comp);
+            }
+            Component::Normal(_) => match &mut pathbuf {
+                Some(pathbuf) => pathbuf.push(comp),
+                None => pathbuf = Some(env::current_dir()?.join(comp)),
+            },
+            Component::ParentDir => match &mut pathbuf {
+                Some(pathbuf) => {
+                    _ = pathbuf.pop();
+                }
+                None => {
+                    pathbuf = Some({
+                        let mut pathbuf = env::current_dir()?;
+                        _ = pathbuf.pop();
+                        pathbuf
+                    })
+                }
+            },
+            Component::CurDir => (),
+        };
+    }
+    pathbuf.map_or_else(env::current_dir, |path| Ok(path))
 }
 
 #[cfg(test)]

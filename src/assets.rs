@@ -1,11 +1,10 @@
-use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Display;
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::path::Path;
 
-use flate2::write::GzDecoder;
+use flate2::bufread::GzDecoder;
 
 use serde::de::DeserializeOwned;
 use syntect::highlighting::Theme;
@@ -94,8 +93,12 @@ impl HighlightingAssets {
     #[cfg(debug_assertions)]
     pub fn with_no_cache() -> Self {
         HighlightingAssets {
-            syntax_set: include_asset!("../assets/syntaxes.gz", Option::<&Path>::None, SYNTAXES_DIGEST)
-                .unwrap(),
+            syntax_set: include_asset!(
+                "../assets/syntaxes.gz",
+                Option::<&Path>::None,
+                SYNTAXES_DIGEST
+            )
+            .unwrap(),
             theme_set: include_asset!("../assets/themes.gz", Option::<&Path>::None, THEMES_DIGEST)
                 .unwrap(),
             guesslang: GuessLang::new(
@@ -436,14 +439,13 @@ fn create_asset_reader(
         {
             Box::new(io::BufReader::new(file))
         } else {
-            let buffer = VecDeque::new();
-            let mut decoder = GzDecoder::new(buffer);
-            decoder.write_all(data)?;
-            let mut buffer = decoder.finish()?;
+            let mut buffer = Vec::new();
+            let mut decoder = GzDecoder::new(data);
+            decoder.read_to_end(&mut buffer)?;
             if let Some(cache_file) = cache_file {
-                fs::write(cache_file, buffer.make_contiguous())?;
+                fs::write(cache_file, &buffer)?;
             }
-            Box::new(buffer)
+            Box::new(io::Cursor::new(buffer))
         },
     )
 }
@@ -746,9 +748,18 @@ mod tests {
     #[test]
     fn assets_integrity() {
         use crc32fast::hash;
-        assert_eq!(SYNTAXES_DIGEST, hash(include_bytes!("../assets/syntaxes.gz")));
+        assert_eq!(
+            SYNTAXES_DIGEST,
+            hash(include_bytes!("../assets/syntaxes.gz"))
+        );
         assert_eq!(THEMES_DIGEST, hash(include_bytes!("../assets/themes.gz")));
-        assert_eq!(GUESSLANG_DIGEST, hash(include_bytes!("../assets/guesslang.ort.gz")));
-        assert_eq!(ACKNOWLEDGEMENTS_DIGEST, hash(include_bytes!("../assets/acknowledgements.gz")));
+        assert_eq!(
+            GUESSLANG_DIGEST,
+            hash(include_bytes!("../assets/guesslang.ort.gz"))
+        );
+        assert_eq!(
+            ACKNOWLEDGEMENTS_DIGEST,
+            hash(include_bytes!("../assets/acknowledgements.gz"))
+        );
     }
 }

@@ -93,15 +93,9 @@ impl GuessLang {
 
         t.truncate(10000); // this is maximum of model input
         let input = CowArray::from(Array0::from_elem((), t)).into_dyn();
-        let inputs = vec![Value::from_array(session.allocator(), &input)
-            .expect("failed to alloc guesslang model input")];
-        let outputs = match session.run(inputs) {
-            Ok(r) => r,
-            Err(_) => return None, // the model may error with very short input
-        };
-        let output: OrtOwnedTensor<f32, _> = outputs[0]
-            .try_extract()
-            .expect("failed to extract guesslang output");
+        let inputs = vec![Value::from_array(session.allocator(), &input).ok()?]; // may fail if string contains \0
+        let outputs = session.run(inputs).ok()?; // the model may error with very short input
+        let output: OrtOwnedTensor<f32, _> = outputs[0].try_extract().ok()?; // WTH is going on?
         let output = output.view();
         let (index, prob) = output
             .iter()
@@ -110,11 +104,7 @@ impl GuessLang {
             .max_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Equal))
             .unwrap();
         let lang = LABELS[index];
-        if prob > 0.5 {
-            Some(lang)
-        } else {
-            None
-        }
+        (prob > 0.5).then_some(lang)
     }
 }
 

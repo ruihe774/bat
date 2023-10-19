@@ -10,8 +10,6 @@ use serde::de::DeserializeOwned;
 use syntect::highlighting::Theme;
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
-use path_abs::PathAbs;
-
 use crate::error::*;
 #[cfg(feature = "guesslang")]
 use crate::guesslang::GuessLang;
@@ -247,10 +245,7 @@ impl HighlightingAssets {
 
         let path = input.path();
         let path_syntax = if let Some(path) = path {
-            self.get_syntax_for_path(
-                PathAbs::new(path).map_or_else(|_| path.to_owned(), |p| p.as_path().to_path_buf()),
-                mapping,
-            )
+            self.get_syntax_for_path(path, mapping)
         } else {
             Err(Error::UndetectedSyntax("[unknown]".into()))
         };

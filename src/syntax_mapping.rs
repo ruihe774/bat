@@ -1,12 +1,10 @@
-use std::{
-    ffi::{OsStr, OsString},
-    path::Path,
-};
+use std::{ffi::OsString, path::Path};
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, Anchored, Input, MatchKind, StartKind};
 use globset::{Candidate, Glob, GlobSet, GlobSetBuilder};
-use os_str_bytes::RawOsStr;
+use os_str_bytes::RawOsString;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MappingTarget<'a> {
@@ -27,17 +25,17 @@ pub enum MappingTarget<'a> {
     MapExtensionToUnknown,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SyntaxMapping<'a> {
     targets: Vec<MappingTarget<'a>>,
     globset: GlobSet,
-    ignored_suffixes: Vec<&'a str>,
+    ignored_suffixes: AhoCorasick,
 }
 
 impl<'a> SyntaxMapping<'a> {
     pub fn new(
         mapping: impl IntoIterator<Item = (Glob, MappingTarget<'a>)>,
-        ignored_suffixes: &[&'a str],
+        ignored_suffixes: impl IntoIterator<Item = String>,
     ) -> Result<Self> {
         let mut builder = GlobSetBuilder::new();
         Ok(SyntaxMapping {
@@ -49,7 +47,16 @@ impl<'a> SyntaxMapping<'a> {
                 })
                 .collect(),
             globset: builder.build()?,
-            ignored_suffixes: Vec::from(ignored_suffixes),
+            ignored_suffixes: AhoCorasickBuilder::new()
+                .ascii_case_insensitive(true)
+                .match_kind(MatchKind::LeftmostLongest)
+                .start_kind(StartKind::Anchored)
+                .build(ignored_suffixes.into_iter().map(|s| {
+                    let mut v: Vec<u8> = s.into();
+                    v.reverse();
+                    v
+                }))
+                .map_err(|err| Error::from(err.to_string()))?,
         })
     }
 
@@ -59,7 +66,9 @@ impl<'a> SyntaxMapping<'a> {
             include!("../assets/syntax_mapping.plist")
                 .into_iter()
                 .map(|(s, t)| (Glob::new(s).expect("invalid builtin syntax mapping"), t)),
-            include!("../assets/ignored_suffixes.plist").as_slice(),
+            include!("../assets/ignored_suffixes.plist")
+                .into_iter()
+                .map(|s| String::from(s)),
         )
         .expect("invalid builtin syntax mapping")
     }
@@ -79,16 +88,28 @@ impl<'a> SyntaxMapping<'a> {
             .map(|i| self.targets[i])
     }
 
-    pub(crate) fn strip_ignored_suffixes(&self, file_name: impl AsRef<OsStr>) -> OsString {
-        let mut name = RawOsStr::new(file_name.as_ref()).into_owned();
-        'outer: loop {
-            for suffix in self.ignored_suffixes.iter().cloned() {
-                if name.strip_suffix(suffix).is_some() {
-                    name.truncate(name.raw_len() - suffix.len());
-                    continue 'outer;
-                }
-            }
-            break name.to_os_str().into_owned();
+    pub(crate) fn strip_ignored_suffixes(&self, file_name: OsString) -> OsString {
+        let file_name = RawOsString::new(file_name);
+        let mut bytes = file_name.into_raw_vec();
+        bytes.reverse();
+        let ignored_len: usize = self
+            .ignored_suffixes
+            .find_iter(Input::new(&bytes).anchored(Anchored::Yes))
+            .map(|m| m.len())
+            .sum();
+        bytes.reverse();
+        bytes.truncate(bytes.len() - ignored_len);
+        RawOsString::assert_from_raw_vec(bytes).into_os_string()
+    }
+}
+
+impl<'a> Default for SyntaxMapping<'a> {
+    fn default() -> Self {
+        let patterns: [&[u8]; 0] = [];
+        SyntaxMapping {
+            targets: Default::default(),
+            globset: Default::default(),
+            ignored_suffixes: AhoCorasick::new(patterns).unwrap(),
         }
     }
 }

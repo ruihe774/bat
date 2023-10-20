@@ -183,7 +183,7 @@ impl HighlightingAssets {
         mapping: &SyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
         let orignal_path = path.as_ref();
-        let path_string = mapping.strip_ignored_suffixes(absolute_path(path.as_ref())?);
+        let path_string = mapping.strip_ignored_suffixes(absolute_path(path.as_ref())?.into());
         let path = Path::new(path_string.as_os_str());
         let undetected = Error::UndetectedSyntax(orignal_path.to_string_lossy().into_owned());
         let syntax_match = mapping.get_syntax_for(&path);

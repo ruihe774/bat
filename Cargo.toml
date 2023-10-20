@@ -62,6 +62,7 @@ build-assets = [
 ]
 
 [dependencies]
+aho-corasick = "1.1"
 ansi_colours = "1.2"
 bincode = "1.0"
 bytesize = "1.3"

@@ -63,10 +63,10 @@ impl<'a> SyntaxMapping<'a> {
     pub fn builtin() -> Self {
         use MappingTarget::*;
         Self::new(
-            include!("../assets/syntax_mapping.plist")
+            include!("../assets/syntax_mapping.ron")
                 .into_iter()
                 .map(|(s, t)| (Glob::new(s).expect("invalid builtin syntax mapping"), t)),
-            include!("../assets/ignored_suffixes.plist")
+            include!("../assets/ignored_suffixes.ron")
                 .into_iter()
                 .map(|s| String::from(s)),
         )

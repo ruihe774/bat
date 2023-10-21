@@ -22,6 +22,7 @@ pub struct LazyThemeSet {
 /// (load) the theme.
 #[derive(Debug, Serialize, Deserialize)]
 struct LazyTheme {
+    #[serde(with = "serde_bytes")]
     serialized: Vec<u8>,
 
     #[serde(skip, default = "OnceCell::new")]

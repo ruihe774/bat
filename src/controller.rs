@@ -1,4 +1,4 @@
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 
 use crate::assets::HighlightingAssets;
 use crate::config::{Config, VisibleLines};
@@ -98,12 +98,7 @@ impl<'b> Controller<'b> {
         for (index, input) in inputs.into_iter().enumerate() {
             let identifier = stdout_identifier.as_ref();
             let is_first = index == 0;
-            let result = if input.is_stdin() {
-                self.print_input(input, &mut writer, io::stdin().lock(), identifier, is_first)
-            } else {
-                // Use dummy stdin since stdin is actually not used (#1902)
-                self.print_input(input, &mut writer, io::empty(), identifier, is_first)
-            };
+            let result = self.print_input(input, &mut writer, identifier, is_first);
             if let Err(error) = result {
                 match writer {
                     // It doesn't make much sense to send errors straight to stderr if the user
@@ -124,11 +119,10 @@ impl<'b> Controller<'b> {
         Ok(no_errors)
     }
 
-    fn print_input<R: BufRead>(
+    fn print_input(
         &self,
         input: Input,
         writer: &mut OutputHandle,
-        stdin: R,
         stdout_identifier: Option<&Identifier>,
         is_first: bool,
     ) -> Result<()> {
@@ -142,7 +136,7 @@ impl<'b> Controller<'b> {
             }
 
             #[cfg(not(feature = "lessopen"))]
-            input.open(stdin, stdout_identifier)?
+            input.open(stdout_identifier)?
         };
         #[cfg(feature = "git")]
         let line_changes = if self.config.visible_lines.diff_mode()
@@ -174,31 +168,38 @@ impl<'b> Controller<'b> {
             None
         };
 
-        let mut printer: Box<dyn Printer> = if self.config.loop_through {
-            Box::new(SimplePrinter::new(self.config))
+        if self.config.loop_through {
+            let mut printer = SimplePrinter::new(self.config);
+            self.print_file(
+                &mut printer,
+                writer,
+                &mut opened_input,
+                !is_first,
+                #[cfg(feature = "git")]
+                &line_changes,
+            )
         } else {
-            Box::new(InteractivePrinter::new(
+            let mut printer = InteractivePrinter::new(
                 self.config,
                 self.assets,
                 &mut opened_input,
                 #[cfg(feature = "git")]
                 &line_changes,
-            )?)
-        };
-
-        self.print_file(
-            &mut *printer,
-            writer,
-            &mut opened_input,
-            !is_first,
-            #[cfg(feature = "git")]
-            &line_changes,
-        )
+            )?;
+            self.print_file(
+                &mut printer,
+                writer,
+                &mut opened_input,
+                !is_first,
+                #[cfg(feature = "git")]
+                &line_changes,
+            )
+        }
     }
 
     fn print_file(
         &self,
-        printer: &mut dyn Printer,
+        printer: &mut impl Printer,
         writer: &mut OutputHandle,
         input: &mut OpenedInput,
         add_header_padding: bool,
@@ -236,7 +237,7 @@ impl<'b> Controller<'b> {
 
     fn print_file_ranges(
         &self,
-        printer: &mut dyn Printer,
+        printer: &mut impl Printer,
         writer: &mut OutputHandle,
         reader: &mut InputReader,
         line_ranges: &LineRanges,

@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::Path;
 
 use console::Term;
@@ -8,7 +8,7 @@ use crate::{
     config::{Config, VisibleLines},
     controller::Controller,
     error::Result,
-    input,
+    input::Input,
     line_range::{HighlightedLineRanges, LineRange, LineRanges},
     style::StyleComponent,
     SyntaxMapping, WrappingMode,
@@ -35,7 +35,7 @@ pub struct Syntax {
 }
 
 pub struct PrettyPrinter<'a> {
-    inputs: Vec<Input<'a>>,
+    inputs: Vec<Input>,
     config: Config<'a>,
     assets: HighlightingAssets,
 
@@ -83,13 +83,13 @@ impl<'a> PrettyPrinter<'a> {
     }
 
     /// Add an input which should be pretty-printed
-    pub fn input(&mut self, input: Input<'a>) -> &mut Self {
+    pub fn input(&mut self, input: Input) -> &mut Self {
         self.inputs.push(input);
         self
     }
 
     /// Adds multiple inputs which should be pretty-printed
-    pub fn inputs(&mut self, inputs: impl IntoIterator<Item = Input<'a>>) -> &mut Self {
+    pub fn inputs(&mut self, inputs: impl IntoIterator<Item = Input>) -> &mut Self {
         for input in inputs {
             self.inputs.push(input);
         }
@@ -98,7 +98,7 @@ impl<'a> PrettyPrinter<'a> {
 
     /// Add a file which should be pretty-printed
     pub fn input_file(&mut self, path: impl AsRef<Path>) -> &mut Self {
-        self.input(Input::from_file(path).kind("File"))
+        self.input(Input::from_file(path.as_ref().to_path_buf()))
     }
 
     /// Add multiple files which should be pretty-printed
@@ -107,7 +107,11 @@ impl<'a> PrettyPrinter<'a> {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        self.inputs(paths.into_iter().map(Input::from_file))
+        self.inputs(
+            paths
+                .into_iter()
+                .map(|path| Input::from_file(path.as_ref().to_path_buf())),
+        )
     }
 
     /// Add STDIN as an input
@@ -117,12 +121,12 @@ impl<'a> PrettyPrinter<'a> {
     }
 
     /// Add a byte string as an input
-    pub fn input_from_bytes(&mut self, content: &'a [u8]) -> &mut Self {
-        self.input_from_reader(content)
+    pub fn input_from_bytes(&mut self, content: Vec<u8>) -> &mut Self {
+        self.input_from_reader(io::Cursor::new(content))
     }
 
     /// Add a custom reader as an input
-    pub fn input_from_reader<R: Read + 'a>(&mut self, reader: R) -> &mut Self {
+    pub fn input_from_reader(&mut self, reader: impl Read + 'static) -> &mut Self {
         self.inputs.push(Input::from_reader(reader));
         self
     }
@@ -319,67 +323,5 @@ impl<'a> PrettyPrinter<'a> {
         // Run the controller
         let controller = Controller::new(&self.config, &self.assets);
         controller.run(inputs.into_iter().map(|i| i.into()).collect(), None)
-    }
-}
-
-/// An input source for the pretty printer.
-pub struct Input<'a> {
-    input: input::Input<'a>,
-}
-
-impl<'a> Input<'a> {
-    /// A new input from a reader.
-    pub fn from_reader<R: Read + 'a>(reader: R) -> Self {
-        input::Input::from_reader(Box::new(reader)).into()
-    }
-
-    /// A new input from a file.
-    pub fn from_file(path: impl AsRef<Path>) -> Self {
-        input::Input::ordinary_file(path).into()
-    }
-
-    /// A new input from bytes.
-    pub fn from_bytes(bytes: &'a [u8]) -> Self {
-        Input::from_reader(bytes)
-    }
-
-    /// A new input from STDIN.
-    pub fn from_stdin() -> Self {
-        input::Input::stdin().into()
-    }
-
-    /// The filename of the input.
-    /// This affects syntax detection and changes the default header title.
-    pub fn name(mut self, name: impl AsRef<Path>) -> Self {
-        self.input = self.input.with_name(Some(name));
-        self
-    }
-
-    /// The description for the type of input (e.g. "File")
-    pub fn kind(mut self, kind: impl Into<String>) -> Self {
-        let kind = kind.into();
-        self.input
-            .description_mut()
-            .set_kind(if kind.is_empty() { None } else { Some(kind) });
-        self
-    }
-
-    /// The title for the input (e.g. "Descriptive title")
-    /// This defaults to the file name.
-    pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.input.description_mut().set_title(Some(title.into()));
-        self
-    }
-}
-
-impl<'a> From<input::Input<'a>> for Input<'a> {
-    fn from(input: input::Input<'a>) -> Self {
-        Self { input }
-    }
-}
-
-impl<'a> From<Input<'a>> for input::Input<'a> {
-    fn from(Input { input }: Input<'a>) -> Self {
-        input
     }
 }

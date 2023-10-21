@@ -7,6 +7,7 @@ use crate::{
     clap_app,
     config::{get_args_from_config_file, get_args_from_env_opts_var, get_args_from_env_vars},
 };
+use bat::input::InputKind;
 use clap::ArgMatches;
 
 use console::Term;
@@ -99,7 +100,10 @@ impl App {
                 let extra_plain = self.matches.get_count("plain") > 1;
                 if extra_plain || self.matches.get_flag("no-paging") {
                     PagingMode::Never
-                } else if inputs.iter().any(Input::is_stdin) {
+                } else if inputs
+                    .iter()
+                    .any(|input| matches!(input.kind, InputKind::StdIn))
+                {
                     // If we are reading from stdin, only enable paging if we write to an
                     // interactive terminal and if we do not *read* from an interactive
                     // terminal.
@@ -350,7 +354,7 @@ impl App {
                             .filter_map(|style| style.ok())
                             .collect::<Vec<_>>()
                     })
-                    .unwrap_or_else(|| vec![StyleComponent::Default])
+                    .unwrap_or_else(|| vec![StyleComponent::Full])
                     .into_iter()
                     .map(|style| style.components(self.interactive_output))
                     .fold(HashSet::new(), |mut acc, components| {

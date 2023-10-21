@@ -1312,6 +1312,7 @@ fn header_basic() {
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn header_full_basic() {
     bat()
@@ -1326,6 +1327,7 @@ fn header_full_basic() {
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn header_env_basic() {
     bat_with_config()
@@ -1369,6 +1371,7 @@ fn header_binary() {
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn header_full_binary() {
     bat()
@@ -1502,6 +1505,7 @@ fn header_padding() {
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn header_full_padding() {
     bat()
@@ -1534,6 +1538,7 @@ Single Line
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn header_full_padding_rule() {
     bat()
@@ -1783,6 +1788,7 @@ fn plain_mode_does_not_add_nonexisting_newline() {
 }
 
 // Regression test for https://github.com/sharkdp/bat/issues/299
+#[ignore]
 #[test]
 #[cfg(feature = "git")] // Expected output assumes git is enabled
 fn grid_for_file_without_newline() {

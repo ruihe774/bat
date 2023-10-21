@@ -65,10 +65,8 @@ build-assets = [
 aho-corasick = "1.1"
 ansi_colours = "1.2"
 bincode = "1.0"
-bytesize = "1.3"
 clircle = "0.4"
 console = "0.15"
-content_inspector = "0.2"
 globset = "0.4"
 nu-ansi-term = "0.49"
 once_cell = "1.18"
@@ -147,6 +145,7 @@ features = ["zlib"]
 
 [target.'cfg(not(unix))'.dependencies]
 flate2 = "1.0"
+content_inspector = "0.2"
 
 [dev-dependencies]
 assert_cmd = "2.0"

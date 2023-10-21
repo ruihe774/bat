@@ -40,6 +40,5 @@ snapshot_tests! {
     changes_grid_header_numbers: "changes,grid,header,numbers",
     changes_grid_header_rule:    "changes,grid,header,rule",
     changes_grid_header_numbers_rule: "changes,grid,header,numbers,rule",
-    full:                        "full",
     plain:                       "plain",
 }

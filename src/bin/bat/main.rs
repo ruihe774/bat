@@ -8,8 +8,7 @@ mod input;
 
 use std::collections::HashSet;
 use std::fmt::Write as _;
-use std::io;
-use std::io::{BufReader, Write};
+use std::io::{self, Write};
 use std::path::Path;
 use std::process;
 
@@ -155,8 +154,8 @@ pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
     Ok(result)
 }
 
-fn theme_preview_file<'a>() -> Input<'a> {
-    Input::from_reader(Box::new(BufReader::new(THEME_PREVIEW_DATA)))
+fn theme_preview_file() -> Input {
+    Input::from_reader(THEME_PREVIEW_DATA)
 }
 
 pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<()> {
@@ -285,7 +284,7 @@ fn run() -> Result<bool> {
                 println!("bat has been built without the 'build-assets' feature. The 'cache --build' option is not available.");
                 Ok(true)
             } else {
-                let inputs = vec![Input::ordinary_file("cache")];
+                let inputs = vec![Input::from_file("cache")];
                 let config = app.config(&inputs)?;
 
                 run_controller(inputs, &config, cache_dir)
@@ -297,7 +296,9 @@ fn run() -> Result<bool> {
 
             if app.matches.get_flag("list-languages") {
                 let languages: String = get_languages(&config, cache_dir)?;
-                let inputs: Vec<Input> = vec![Input::from_reader(Box::new(languages.as_bytes()))];
+                let inputs: Vec<Input> = vec![Input::from_reader(io::Cursor::<Vec<u8>>::new(
+                    languages.into(),
+                ))];
                 let plain_config = Config {
                     style_components: StyleComponents::new(StyleComponent::Plain.components(false)),
                     paging_mode: PagingMode::QuitIfOneScreen,

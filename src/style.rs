@@ -13,11 +13,9 @@ pub enum StyleComponent {
     Rule,
     Header,
     HeaderFilename,
-    HeaderFilesize,
     LineNumbers,
     Snip,
     Full,
-    Default,
     Plain,
 }
 
@@ -26,7 +24,7 @@ impl StyleComponent {
         match self {
             StyleComponent::Auto => {
                 if interactive_terminal {
-                    StyleComponent::Default.components(interactive_terminal)
+                    StyleComponent::Full.components(interactive_terminal)
                 } else {
                     StyleComponent::Plain.components(interactive_terminal)
                 }
@@ -37,19 +35,9 @@ impl StyleComponent {
             StyleComponent::Rule => &[StyleComponent::Rule],
             StyleComponent::Header => &[StyleComponent::HeaderFilename],
             StyleComponent::HeaderFilename => &[StyleComponent::HeaderFilename],
-            StyleComponent::HeaderFilesize => &[StyleComponent::HeaderFilesize],
             StyleComponent::LineNumbers => &[StyleComponent::LineNumbers],
             StyleComponent::Snip => &[StyleComponent::Snip],
             StyleComponent::Full => &[
-                #[cfg(feature = "git")]
-                StyleComponent::Changes,
-                StyleComponent::Grid,
-                StyleComponent::HeaderFilename,
-                StyleComponent::HeaderFilesize,
-                StyleComponent::LineNumbers,
-                StyleComponent::Snip,
-            ],
-            StyleComponent::Default => &[
                 #[cfg(feature = "git")]
                 StyleComponent::Changes,
                 StyleComponent::Grid,
@@ -74,12 +62,12 @@ impl FromStr for StyleComponent {
             "rule" => Ok(StyleComponent::Rule),
             "header" => Ok(StyleComponent::Header),
             "header-filename" => Ok(StyleComponent::HeaderFilename),
-            "header-filesize" => Ok(StyleComponent::HeaderFilesize),
             "numbers" => Ok(StyleComponent::LineNumbers),
             "snip" => Ok(StyleComponent::Snip),
             "full" => Ok(StyleComponent::Full),
-            "default" => Ok(StyleComponent::Default),
             "plain" => Ok(StyleComponent::Plain),
+            // for backward compatibility, default is to full
+            "default" => Ok(StyleComponent::Full),
             _ => Err(format!("Unknown style '{}'", s).into()),
         }
     }
@@ -107,15 +95,11 @@ impl StyleComponents {
     }
 
     pub fn header(&self) -> bool {
-        self.header_filename() || self.header_filesize()
+        self.header_filename()
     }
 
     pub fn header_filename(&self) -> bool {
         self.0.contains(&StyleComponent::HeaderFilename)
-    }
-
-    pub fn header_filesize(&self) -> bool {
-        self.0.contains(&StyleComponent::HeaderFilesize)
     }
 
     pub fn numbers(&self) -> bool {

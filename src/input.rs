@@ -1,12 +1,11 @@
 use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
-use std::fs;
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
 use clircle::{Clircle, Identifier};
-use content_inspector::{self, ContentType};
 
 use crate::error::*;
 
@@ -14,88 +13,38 @@ use crate::error::*;
 /// This tells bat how to refer to the input.
 #[derive(Clone)]
 pub struct InputDescription {
-    pub(crate) name: String,
-
-    /// The input title.
-    /// This replaces the name if provided.
-    title: Option<String>,
-
-    /// The input kind.
-    kind: Option<String>,
-
-    /// A summary description of the input.
-    /// Defaults to "{kind} '{name}'"
-    summary: Option<String>,
+    pub name: Option<OsString>,
+    pub kind: String,
 }
 
 impl InputDescription {
     /// Creates a description for an input.
-    pub fn new(name: impl Into<String>) -> Self {
-        InputDescription {
-            name: name.into(),
-            title: None,
-            kind: None,
-            summary: None,
-        }
-    }
-
-    pub fn set_kind(&mut self, kind: Option<String>) {
-        self.kind = kind;
-    }
-
-    pub fn set_summary(&mut self, summary: Option<String>) {
-        self.summary = summary;
-    }
-
-    pub fn set_title(&mut self, title: Option<String>) {
-        self.title = title;
-    }
-
-    pub fn title(&self) -> &String {
-        match &self.title {
-            Some(title) => title,
-            None => &self.name,
-        }
-    }
-
-    pub fn kind(&self) -> Option<&String> {
-        self.kind.as_ref()
-    }
-
-    pub fn summary(&self) -> String {
-        self.summary.clone().unwrap_or_else(|| match &self.kind {
-            None => self.name.clone(),
-            Some(kind) => format!("{} '{}'", kind.to_lowercase(), self.name),
-        })
+    fn new(name: Option<OsString>, kind: String) -> Self {
+        InputDescription { name, kind }
     }
 }
 
-pub(crate) enum InputKind<'a> {
+pub enum InputKind {
     OrdinaryFile(PathBuf),
     StdIn,
-    CustomReader(Box<dyn Read + 'a>),
+    CustomReader(Box<dyn Read>),
 }
 
-impl<'a> InputKind<'a> {
+impl InputKind {
     pub fn description(&self) -> InputDescription {
         match self {
-            InputKind::OrdinaryFile(ref path) => InputDescription::new(path.to_string_lossy()),
-            InputKind::StdIn => InputDescription::new("STDIN"),
-            InputKind::CustomReader(_) => InputDescription::new("READER"),
+            InputKind::OrdinaryFile(ref path) => {
+                InputDescription::new(Some(path.as_os_str().to_os_string()), "File".to_owned())
+            }
+            InputKind::StdIn => InputDescription::new(None, "STDIN".to_owned()),
+            InputKind::CustomReader(_) => InputDescription::new(None, "READER".to_owned()),
         }
     }
 }
 
-#[derive(Clone, Default)]
-pub(crate) struct InputMetadata {
-    pub(crate) user_provided_name: Option<PathBuf>,
-    pub(crate) size: Option<u64>,
-}
-
-pub struct Input<'a> {
-    pub(crate) kind: InputKind<'a>,
-    pub(crate) metadata: InputMetadata,
-    pub(crate) description: InputDescription,
+pub struct Input {
+    pub kind: InputKind,
+    pub description: InputDescription,
 }
 
 pub(crate) enum OpenedInputKind {
@@ -104,96 +53,45 @@ pub(crate) enum OpenedInputKind {
     CustomReader,
 }
 
-pub(crate) struct OpenedInput<'a> {
+pub(crate) struct OpenedInput {
     pub(crate) kind: OpenedInputKind,
-    pub(crate) metadata: InputMetadata,
-    pub(crate) reader: InputReader<'a>,
+    pub(crate) reader: InputReader,
     pub(crate) description: InputDescription,
 }
 
-impl OpenedInput<'_> {
-    /// Get the path of the file:
-    /// If this was set by the metadata, that will take priority.
-    /// If it wasn't, it will use the real file path (if available).
-    pub(crate) fn path(&self) -> Option<&PathBuf> {
-        self.metadata
-            .user_provided_name
-            .as_ref()
-            .or(match self.kind {
-                OpenedInputKind::OrdinaryFile(ref path) => Some(path),
-                _ => None,
-            })
+impl OpenedInput {
+    pub(crate) fn path(&self) -> Option<&Path> {
+        self.description.name.as_ref().map(|name| Path::new(name))
     }
 }
 
-impl<'a> Input<'a> {
-    pub fn ordinary_file(path: impl AsRef<Path>) -> Self {
-        Self::_ordinary_file(path.as_ref())
-    }
-
-    fn _ordinary_file(path: &Path) -> Self {
-        let kind = InputKind::OrdinaryFile(path.to_path_buf());
-        let metadata = InputMetadata {
-            size: fs::metadata(path).map(|m| m.len()).ok(),
-            ..InputMetadata::default()
-        };
-
+impl Input {
+    pub fn from_file(path: impl Into<PathBuf>) -> Self {
+        let kind = InputKind::OrdinaryFile(path.into());
         Input {
             description: kind.description(),
-            metadata,
             kind,
         }
     }
 
-    pub fn stdin() -> Self {
+    pub fn from_stdin() -> Self {
         let kind = InputKind::StdIn;
         Input {
             description: kind.description(),
-            metadata: InputMetadata::default(),
             kind,
         }
     }
 
-    pub fn from_reader(reader: Box<dyn Read + 'a>) -> Self {
-        let kind = InputKind::CustomReader(reader);
+    pub fn from_reader(reader: impl Read + 'static) -> Self {
+        let kind = InputKind::CustomReader(Box::new(reader));
         Input {
             description: kind.description(),
-            metadata: InputMetadata::default(),
             kind,
         }
     }
 
-    pub fn is_stdin(&self) -> bool {
-        matches!(self.kind, InputKind::StdIn)
-    }
-
-    pub fn with_name(self, provided_name: Option<impl AsRef<Path>>) -> Self {
-        self._with_name(provided_name.as_ref().map(|it| it.as_ref()))
-    }
-
-    fn _with_name(mut self, provided_name: Option<&Path>) -> Self {
-        if let Some(name) = provided_name {
-            self.description.name = name.to_string_lossy().to_string()
-        }
-
-        self.metadata.user_provided_name = provided_name.map(|n| n.to_owned());
-        self
-    }
-
-    pub fn description(&self) -> &InputDescription {
-        &self.description
-    }
-
-    pub fn description_mut(&mut self) -> &mut InputDescription {
-        &mut self.description
-    }
-
-    pub(crate) fn open<R: BufRead + 'a>(
-        self,
-        stdin: R,
-        stdout_identifier: Option<&Identifier>,
-    ) -> Result<OpenedInput<'a>> {
-        let description = self.description().clone();
+    pub(crate) fn open(self, stdout_identifier: Option<&Identifier>) -> Result<OpenedInput> {
+        let description = self.description.clone();
         match self.kind {
             InputKind::StdIn => {
                 if let Some(stdout) = stdout_identifier {
@@ -207,30 +105,28 @@ impl<'a> Input<'a> {
                 Ok(OpenedInput {
                     kind: OpenedInputKind::StdIn,
                     description,
-                    metadata: self.metadata,
-                    reader: InputReader::new(stdin),
+                    reader: InputReader::new(io::stdin().lock()),
                 })
             }
 
             InputKind::OrdinaryFile(path) => Ok(OpenedInput {
                 kind: OpenedInputKind::OrdinaryFile(path.clone()),
                 description,
-                metadata: self.metadata,
                 reader: {
-                    let mut file = File::open(&path)
-                        .map_err(|e| format!("'{}': {}", path.to_string_lossy(), e))?;
+                    let mut file =
+                        File::open(&path).map_err(|e| format!("'{}': {}", path.display(), e))?;
                     if file.metadata()?.is_dir() {
-                        return Err(format!("'{}' is a directory.", path.to_string_lossy()).into());
+                        return Err(format!("'{}' is a directory.", path.display()).into());
                     }
 
                     if let Some(stdout) = stdout_identifier {
                         let input_identifier = Identifier::try_from(file).map_err(|e| {
-                            format!("{}: Error identifying file: {}", path.to_string_lossy(), e)
+                            format!("{}: Error identifying file: {}", path.display(), e)
                         })?;
                         if stdout.surely_conflicts_with(&input_identifier) {
                             return Err(format!(
                                 "IO circle detected. The input from '{}' is also an output. Aborting to avoid infinite loop.",
-                                path.to_string_lossy()
+                                path.display()
                             )
                             .into());
                         }
@@ -243,26 +139,47 @@ impl<'a> Input<'a> {
             InputKind::CustomReader(reader) => Ok(OpenedInput {
                 description,
                 kind: OpenedInputKind::CustomReader,
-                metadata: self.metadata,
                 reader: InputReader::new(BufReader::new(reader)),
             }),
         }
     }
 }
 
-pub(crate) struct InputReader<'a> {
-    inner: Box<dyn BufRead + 'a>,
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ContentType {
+    /// "binary" data
+    BINARY(Option<String>),
+
+    /// UTF-8 encoded "text" data
+    UTF_8,
+
+    /// UTF-16 encoded "text" data (little endian)
+    UTF_16LE,
+
+    /// UTF-16 encoded "text" data (big endian)
+    UTF_16BE,
+
+    /// UTF-32 encoded "text" data (little endian)
+    UTF_32LE,
+
+    /// UTF-32 encoded "text" data (big endian)
+    UTF_32BE,
+}
+
+pub(crate) struct InputReader {
+    inner: Box<dyn BufRead>,
     pub(crate) first_read: Option<String>,
     pub(crate) content_type: Option<ContentType>,
 }
 
-impl<'a> InputReader<'a> {
-    pub(crate) fn new<R: BufRead + 'a>(mut reader: R) -> InputReader<'a> {
+impl InputReader {
+    pub(crate) fn new<R: BufRead + 'static>(mut reader: R) -> InputReader {
         let first_read = reader.fill_buf().ok().filter(|buf| !buf.is_empty());
 
         let (first_read, content_type) = if let Some(first_read) = first_read {
-            let content_type = content_inspector::inspect(first_read);
-            let first_read = decode(first_read, content_type, true);
+            let content_type = inspect(first_read);
+            let first_read = decode(first_read, &content_type, true);
             let first_read = if let Some(first_read) = first_read {
                 let truncated = first_read.trim_end_matches(char::REPLACEMENT_CHARACTER);
                 let len = truncated.len();
@@ -327,15 +244,25 @@ impl<'a> InputReader<'a> {
     }
 }
 
-pub(crate) fn decode(
-    input: &[u8],
-    content_type: ContentType,
+impl ContentType {
+    pub(crate) fn is_binary(&self) -> bool {
+        matches!(self, ContentType::BINARY(_))
+    }
+
+    pub(crate) fn is_text(&self) -> bool {
+        !self.is_binary()
+    }
+}
+
+pub(crate) fn decode<'a>(
+    input: &'a [u8],
+    content_type: &ContentType,
     remove_bom: bool,
-) -> Option<Cow<'_, str>> {
+) -> Option<Cow<'a, str>> {
     use ContentType::*;
     let remove_bom = remove_bom.then_some(());
     Some(match content_type {
-        UTF_8 | UTF_8_BOM => {
+        UTF_8 => {
             let input = remove_bom
                 .and_then(|_| input.strip_prefix(&[0xEF, 0xBB, 0xBF]))
                 .unwrap_or(input);
@@ -401,8 +328,54 @@ pub(crate) fn decode(
             }
             s.into()
         }
-        BINARY => return None,
+        BINARY(_) => return None,
     })
+}
+
+#[cfg(not(unix))]
+fn inspect(buffer: &[u8]) -> ContentType {
+    use content_inspector::ContentType::*;
+    match content_inspector::inspect(buffer) {
+        UTF_8 | UTF_8_BOM => ContentType::UTF_8,
+        UTF_16LE => ContentType::UTF_16LE,
+        UTF_16BE => ContentType::UTF_16BE,
+        UTF_32LE => ContentType::UTF_32LE,
+        UTF_32BE => ContentType::UTF_32BE,
+        BINARY => ContentType::BINARY(None),
+    }
+}
+
+#[cfg(unix)]
+fn execuate_file(args: impl IntoIterator<Item = impl AsRef<OsStr>>, buffer: &[u8]) -> String {
+    use std::process::{Command, Stdio};
+    let mut child = Command::new("/usr/bin/file")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to execuate /usr/bin/file");
+    child.stdin.take().unwrap().write_all(buffer).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "/usr/bin/file exited with failure");
+    let mut s = String::from_utf8(output.stdout).unwrap();
+    s.truncate(s.trim_end().len());
+    s
+}
+
+#[cfg(unix)]
+fn inspect(buffer: &[u8]) -> ContentType {
+    let encoding = execuate_file(["--brief", "--mime-encoding", "-"], buffer);
+    match encoding.as_str() {
+        "us-ascii" | "utf-8" | "unknown-8bit" => ContentType::UTF_8,
+        "utf-16le" => ContentType::UTF_16LE,
+        "utf-16be" => ContentType::UTF_16BE,
+        "utf-32le" => ContentType::UTF_32LE,
+        "utf-32be" => ContentType::UTF_32BE,
+        _ => ContentType::BINARY({
+            let format = execuate_file(["--brief", "-"], buffer);
+            (&format != "data" && &format != "very short file (no magic)").then_some(format)
+        }),
+    }
 }
 
 #[test]

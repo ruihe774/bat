@@ -1,11 +1,9 @@
-use std::fmt;
+use std::fmt::{self, Write};
 use std::io;
 use std::vec::Vec;
 
 use nu_ansi_term::Color::{Fixed, Green, Red, Yellow};
 use nu_ansi_term::Style;
-
-use bytesize::ByteSize;
 
 use console::AnsiCodeIterator;
 
@@ -13,8 +11,6 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::Color;
 use syntect::highlighting::Theme;
 use syntect::parsing::SyntaxSet;
-
-use content_inspector::ContentType;
 
 use unicode_width::UnicodeWidthChar;
 
@@ -26,11 +22,10 @@ use crate::decorations::{Decoration, GridBorderDecoration, LineNumberDecoration}
 #[cfg(feature = "git")]
 use crate::diff::LineChanges;
 use crate::error::*;
-use crate::input::decode;
-use crate::input::OpenedInput;
+use crate::input::{decode, ContentType, OpenedInput};
 use crate::line_range::RangeCheckResult;
 use crate::preprocessor::{expand_tabs, replace_nonprintable};
-use crate::style::StyleComponent;
+
 use crate::terminal::{as_terminal_escaped, to_ansi_color};
 use crate::vscreen::AnsiStyle;
 use crate::wrapping::WrappingMode;
@@ -212,6 +207,7 @@ impl<'a> InteractivePrinter<'a> {
         let highlighter_from_set = if input
             .reader
             .content_type
+            .as_ref()
             .map_or(false, |c| c.is_binary() && !config.show_nonprintable)
         {
             None
@@ -234,7 +230,7 @@ impl<'a> InteractivePrinter<'a> {
             colors,
             config,
             decorations,
-            content_type: input.reader.content_type,
+            content_type: input.reader.content_type.clone(),
             ansi_style: AnsiStyle::new(),
             #[cfg(feature = "git")]
             line_changes,
@@ -323,14 +319,32 @@ impl<'a> Printer for InteractivePrinter<'a> {
         }
 
         if !self.config.style_components.header() {
-            if Some(ContentType::BINARY) == self.content_type && !self.config.show_nonprintable {
+            if self
+                .content_type
+                .as_ref()
+                .map_or(false, |content_type| content_type.is_binary())
+                && !self.config.show_nonprintable
+            {
                 writeln!(
                     handle,
                     "{}: Binary content from {} will not be printed to the terminal \
                      (but will be present if the output of 'bat' is piped). You can use 'bat -A' \
                      to show the binary file contents.",
                     Yellow.paint("[bat warning]"),
-                    input.description.summary(),
+                    if &input.description.kind == "File" {
+                        format!(
+                            "file '{}'",
+                            input
+                                .description
+                                .name
+                                .as_ref()
+                                .expect("file must have a name")
+                                .to_string_lossy()
+                                .as_ref()
+                        )
+                    } else {
+                        format!("{}", input.description.kind)
+                    },
                 )?;
             } else if self.config.style_components.grid() {
                 self.print_horizontal_line(handle, '┬')?;
@@ -339,34 +353,19 @@ impl<'a> Printer for InteractivePrinter<'a> {
         }
 
         let mode = match self.content_type {
-            Some(ContentType::BINARY) => "   <BINARY>",
-            Some(ContentType::UTF_16LE) => "   <UTF-16LE>",
-            Some(ContentType::UTF_16BE) => "   <UTF-16BE>",
-            Some(ContentType::UTF_32LE) => "   <UTF-32LE>",
-            Some(ContentType::UTF_32BE) => "   <UTF-32BE>",
-            None => "   <EMPTY>",
-            _ => "",
+            Some(ContentType::BINARY(None)) => "   <BINARY>".to_owned(),
+            Some(ContentType::BINARY(Some(ref binary_type))) => {
+                format!("   <BINARY> {}", binary_type)
+            }
+            Some(ContentType::UTF_16LE) => "   <UTF-16LE>".to_owned(),
+            Some(ContentType::UTF_16BE) => "   <UTF-16BE>".to_owned(),
+            Some(ContentType::UTF_32LE) => "   <UTF-32LE>".to_owned(),
+            Some(ContentType::UTF_32BE) => "   <UTF-32BE>".to_owned(),
+            None => "   <EMPTY>".to_owned(),
+            Some(ContentType::UTF_8) => String::new(),
         };
 
         let description = &input.description;
-        let metadata = &input.metadata;
-
-        // We use this iterator to have a deterministic order for
-        // header components. HashSet has arbitrary order, but Vec is ordered.
-        let header_components: Vec<StyleComponent> = [
-            (
-                StyleComponent::HeaderFilename,
-                self.config.style_components.header_filename(),
-            ),
-            (
-                StyleComponent::HeaderFilesize,
-                self.config.style_components.header_filesize(),
-            ),
-        ]
-        .iter()
-        .filter(|(_, is_enabled)| *is_enabled)
-        .map(|(component, _)| *component)
-        .collect();
 
         // Print the cornering grid before the first header component
         if self.config.style_components.grid() {
@@ -378,34 +377,32 @@ impl<'a> Printer for InteractivePrinter<'a> {
             }
         }
 
-        header_components.iter().try_for_each(|component| {
-            self.print_header_component_indent(handle)?;
-
-            match component {
-                StyleComponent::HeaderFilename => writeln!(
-                    handle,
-                    "{}{}{}",
+        self.print_header_component_indent(handle)?;
+        if self.config.style_components.header_filename() {
+            writeln!(
+                handle,
+                "{}{}{}{}",
+                if description.name.is_some() {
+                    &description.kind
+                } else {
+                    ""
+                },
+                if description.name.is_some() { ": " } else { "" },
+                self.colors.header_value.paint(
                     description
-                        .kind()
-                        .map(|kind| format!("{}: ", kind))
-                        .unwrap_or_else(|| "".into()),
-                    self.colors.header_value.paint(description.title()),
-                    mode
+                        .name
+                        .as_ref()
+                        .map(|s| s.to_string_lossy())
+                        .unwrap_or(description.kind.as_str().into())
                 ),
-
-                StyleComponent::HeaderFilesize => {
-                    let bsize = metadata
-                        .size
-                        .map(|s| format!("{}", ByteSize(s)))
-                        .unwrap_or_else(|| "-".into());
-                    writeln!(handle, "Size: {}", self.colors.header_value.paint(bsize))
-                }
-                _ => Ok(()),
-            }
-        })?;
+                mode
+            )?;
+        };
 
         if self.config.style_components.grid() {
-            if self.content_type.map_or(false, |c| c.is_text()) || self.config.show_nonprintable {
+            if self.content_type.as_ref().map_or(false, |c| c.is_text())
+                || self.config.show_nonprintable
+            {
                 self.print_horizontal_line(handle, '┼')?;
             } else {
                 self.print_horizontal_line(handle, '┴')?;
@@ -417,7 +414,8 @@ impl<'a> Printer for InteractivePrinter<'a> {
 
     fn print_footer(&mut self, handle: &mut OutputHandle, _input: &OpenedInput) -> Result<()> {
         if self.config.style_components.grid()
-            && (self.content_type.map_or(false, |c| c.is_text()) || self.config.show_nonprintable)
+            && (self.content_type.as_ref().map_or(false, |c| c.is_text())
+                || self.config.show_nonprintable)
         {
             self.print_horizontal_line(handle, '┴')
         } else {
@@ -466,7 +464,8 @@ impl<'a> Printer for InteractivePrinter<'a> {
         } else {
             match self
                 .content_type
-                .and_then(|content_type| decode(line_buffer, content_type, line_number == 1))
+                .as_ref()
+                .and_then(|content_type| decode(line_buffer, &content_type, line_number == 1))
             {
                 Some(line) => line,
                 None => return Ok(()),

@@ -37,7 +37,7 @@ const LABELS: [&str; 54] = [
     "lua",
     "makefile",
     "md",
-    "matla",
+    "matlab",
     "mm",
     "ml",
     "pas",
@@ -47,7 +47,7 @@ const LABELS: [&str; 54] = [
     "prolog",
     "py",
     "r",
-    "r",
+    "rb",
     "rs",
     "scala",
     "sh",
@@ -65,8 +65,9 @@ const LABELS: [&str; 54] = [
 static ENVIRONMENT: OnceCell<Arc<Environment>> = OnceCell::new();
 static SESSION: OnceCell<InMemorySession> = OnceCell::new();
 
-pub(crate) fn guesslang(t: String) -> Option<&'static str> {
-    let environment = ENVIRONMENT.get_or_init(|| Environment::default().into_arc());
+pub(crate) fn guesslang(mut t: String) -> Option<&'static str> {
+    let environment = ENVIRONMENT
+        .get_or_init(|| Environment::default().into_arc());
     let session = SESSION
         .get_or_try_init(|| {
             SessionBuilder::new(environment)?
@@ -76,16 +77,11 @@ pub(crate) fn guesslang(t: String) -> Option<&'static str> {
         })
         .expect("failed to init guesslang session");
 
+    t.truncate(10000); // this is maximum of model input
     let input = CowArray::from(Array0::from_elem((), t)).into_dyn();
-    let inputs = vec![Value::from_array(session.allocator(), &input)
-        .expect("failed to alloc guesslang model input")];
-    let outputs = match session.run(inputs) {
-        Ok(r) => r,
-        Err(_) => return None, // the model may error with very short input
-    };
-    let output: OrtOwnedTensor<f32, _> = outputs[0]
-        .try_extract()
-        .expect("failed to extract guesslang output");
+    let inputs = vec![Value::from_array(session.allocator(), &input).ok()?]; // may fail if string contains \0
+    let outputs = session.run(inputs).ok()?; // the model may error with very short input
+    let output: OrtOwnedTensor<f32, _> = outputs[0].try_extract().ok()?; // WTH is going on?
     let output = output.view();
     let (index, prob) = output
         .iter()
@@ -94,5 +90,5 @@ pub(crate) fn guesslang(t: String) -> Option<&'static str> {
         .max_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Equal))
         .unwrap();
     let lang = LABELS[index];
-    return if prob > 0.5 { Some(lang) } else { None };
+    (prob > 0.5).then_some(lang)
 }

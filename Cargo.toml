@@ -130,7 +130,7 @@ default-features = false
 git = "https://github.com/ruihe774/syntect.git"
 branch = "msk"
 default-features = false
-features = ["parsing", "regex-fancy"]
+features = ["parsing", "regex-onig"]
 
 [dependencies.ort]
 git = "https://github.com/ruihe774/ort.git"

@@ -1,14 +1,15 @@
 use super::*;
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 
 use serde::Deserialize;
 use serde::Serialize;
 
 use once_cell::unsync::OnceCell;
 
-use syntect::highlighting::{Theme, ThemeSet};
+use serde_bytes::{ByteBuf, Bytes};
+use syntect::highlighting::Theme;
 
 /// Same structure as a [`syntect::highlighting::ThemeSet`] but with themes
 /// stored in raw serialized form, and deserialized on demand.
@@ -22,8 +23,8 @@ pub struct LazyThemeSet {
 /// (load) the theme.
 #[derive(Debug, Serialize, Deserialize)]
 struct LazyTheme {
-    #[serde(with = "serde_bytes")]
-    serialized: Vec<u8>,
+    #[serde(serialize_with = "serialize_refcell_bytes", deserialize_with = "deserialize_refcell_bytes")]
+    serialized: RefCell<Vec<u8>>,
 
     #[serde(skip, default = "OnceCell::new")]
     deserialized: OnceCell<syntect::highlighting::Theme>,
@@ -32,41 +33,42 @@ struct LazyTheme {
 impl LazyThemeSet {
     /// Lazily load the given theme
     pub fn get(&self, name: &str) -> Option<&Theme> {
-        self.themes.get(name).map(|lazy_theme| {
-            lazy_theme
-                .deserialized
-                .get_or_init(|| lazy_theme.deserialize().unwrap())
-        })
+        self.themes
+            .get(name)
+            .map(|lazy_theme| lazy_theme.deserialize().unwrap())
     }
 
     /// Returns the name of all themes.
     pub fn themes(&self) -> impl Iterator<Item = &str> {
-        self.themes.keys().map(|name| name.as_ref())
+        self.themes.keys().map(|name| name.as_str())
     }
 }
 
 impl LazyTheme {
-    fn deserialize(&self) -> Result<Theme> {
-        asset_from_reader(&self.serialized[..], "lazy-loaded theme")
+    fn deserialize(&self) -> Result<&Theme> {
+        self.deserialized
+            .get_or_try_init(|| asset_from_bytes(self.serialized.take(), "lazy-loaded theme"))
     }
 }
 
-impl TryFrom<LazyThemeSet> for ThemeSet {
-    type Error = Error;
+fn serialize_refcell_bytes<S>(
+    bytes: &RefCell<Vec<u8>>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    Bytes::new(bytes.borrow().as_slice()).serialize(serializer)
+}
 
-    /// Since the user might want to add custom themes to bat, we need a way to
-    /// convert from a `LazyThemeSet` to a regular [`ThemeSet`] so that more
-    /// themes can be added. This function does that pretty straight-forward
-    /// conversion.
-    fn try_from(lazy_theme_set: LazyThemeSet) -> Result<Self> {
-        let mut theme_set = ThemeSet::default();
-
-        for (name, lazy_theme) in lazy_theme_set.themes {
-            theme_set.themes.insert(name, lazy_theme.deserialize()?);
-        }
-
-        Ok(theme_set)
-    }
+fn deserialize_refcell_bytes<'de, D>(
+    deserializer: D,
+) -> std::result::Result<RefCell<Vec<u8>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let bytebuf = ByteBuf::deserialize(deserializer)?;
+    Ok(RefCell::new(bytebuf.into_vec()))
 }
 
 #[cfg(feature = "build-assets")]

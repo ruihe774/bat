@@ -19,6 +19,7 @@ default = ["application"]
 application = [
     "bugreport",
     "guesslang",
+    "zero-copy",
     "minimal-application",
 ]
 
@@ -53,6 +54,12 @@ guesslang = [
     "ndarray",
 ]
 
+# Support zero-copy IO
+zero-copy = [
+    "memmap2",
+    "libmimalloc-sys"
+]
+
 # Support assets building
 build-assets = [
     "syntect/yaml-load",
@@ -75,6 +82,10 @@ serde_yaml = "0.9"
 thiserror = "1.0"
 unicode-width = "0.1"
 
+[dependencies.os_str_bytes]
+version = "6.6"
+features = ["conversions"]
+
 [dependencies.serde]
 version = "1.0"
 features = ["derive"]
@@ -87,13 +98,13 @@ optional = true
 version = "0.1"
 optional = true
 
+[dependencies.memmap2]
+version = "0.9"
+optional = true
+
 [dependencies.ndarray]
 version = "0.15"
 optional = true
-
-[dependencies.os_str_bytes]
-version = "6.6"
-features = ["conversions"]
 
 [dependencies.regex]
 version = "1.8"
@@ -124,6 +135,11 @@ features = ["format_plaintext"]
 version = "4.4"
 optional = true
 features = ["wrap_help", "cargo"]
+
+[dependencies.libmimalloc-sys]
+version = "0.1"
+optional = true
+features = ["extended"]
 
 [dependencies.git2]
 version = "0.18"

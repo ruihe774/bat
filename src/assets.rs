@@ -16,6 +16,8 @@ use crate::error::*;
 use crate::guesslang::GuessLang;
 use crate::input::{InputReader, OpenedInput};
 use crate::syntax_mapping::MappingTarget;
+#[cfg(feature = "zero-copy")]
+use crate::zero_copy::{create_file_mapped_leaky_slice, create_leaky_slice, LeakySliceReader};
 use crate::{bat_warning, SyntaxMapping};
 
 use lazy_theme_set::LazyThemeSet;
@@ -30,20 +32,14 @@ mod lazy_theme_set;
 #[cfg(feature = "guesslang")]
 macro_rules! include_asset_bytes {
     ($asset_path:literal, $cache_dir:expr) => {
-        create_asset_reader($asset_path, include_bytes!($asset_path), $cache_dir).and_then(
-            |mut reader| {
-                let mut v = Vec::new();
-                reader.read_to_end(&mut v)?;
-                Ok(v)
-            },
-        )
+        load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir)
     };
 }
 
 macro_rules! include_asset {
     ($asset_path:literal, $cache_dir:expr) => {
-        create_asset_reader($asset_path, include_bytes!($asset_path), $cache_dir)
-            .and_then(|reader| asset_from_reader(reader, $asset_path))
+        load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir)
+            .and_then(|bytes| asset_from_bytes(bytes, $asset_path))
     };
 }
 
@@ -328,11 +324,11 @@ fn macos_dark_mode_active() -> bool {
     is_dark
 }
 
-fn create_asset_reader(
+fn load_asset_bytes(
     asset_path: impl AsRef<Path>,
     data: &[u8],
     cache_dir: Option<impl AsRef<Path>>,
-) -> Result<Box<dyn Read>> {
+) -> Result<Vec<u8>> {
     let mut iter = data
         .rchunks_exact(4)
         .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()));
@@ -356,29 +352,53 @@ fn create_asset_reader(
         None
     };
     Ok(
-        if let Some(file) = cache_file
-            .as_ref()
-            .and_then(|cache_file| File::open(cache_file).ok())
-        {
-            Box::new(io::BufReader::new(file))
+        if let Some(buffer) = cache_file.as_ref().and_then(|cache_file| {
+            #[cfg(feature = "zero-copy")]
+            return File::open(cache_file)
+                .and_then(|f| unsafe { create_file_mapped_leaky_slice(&f) })
+                .map(|slice| unsafe {
+                    Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), slice.len())
+                })
+                .ok();
+            #[cfg(not(feature = "zero-copy"))]
+            return fs::read(cache_file).ok();
+        }) {
+            buffer
         } else {
-            let mut buffer = Vec::with_capacity(length);
             let mut decoder = GzDecoder::new(data);
-            decoder.read_to_end(&mut buffer)?;
+            #[cfg(feature = "zero-copy")]
+            let buffer = {
+                let mut buffer = unsafe {
+                    let slice = create_leaky_slice(length)?;
+                    Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), slice.len())
+                };
+                decoder.read_exact(buffer.as_mut_slice())?;
+                buffer
+            };
+            #[cfg(not(feature = "zero-copy"))]
+            let buffer = {
+                let mut buffer = Vec::with_capacity(length);
+                decoder.read_to_end(&mut buffer)?;
+                buffer
+            };
             if let Some(cache_file) = cache_file {
                 fs::create_dir_all(cache_file.parent().unwrap())?;
                 fs::write(cache_file, &buffer)?;
             }
-            Box::new(io::Cursor::new(buffer))
+            buffer
         },
     )
 }
 
-fn asset_from_reader<T: DeserializeOwned>(
-    reader: impl Read,
+fn asset_from_bytes<T: DeserializeOwned>(
+    bytes: Vec<u8>,
     description: impl Display,
 ) -> Result<T> {
-    bincode::deserialize_from(reader).map_err(|_| format!("Could not parse {}", description).into())
+    #[cfg(feature = "zero-copy")]
+    let r = bincode::deserialize_from_custom(LeakySliceReader::from_leaky_vec(bytes));
+    #[cfg(not(feature = "zero-copy"))]
+    let r = bincode::deserialize(bytes.as_slice());
+    r.map_err(|_| format!("Could not parse {}", description).into())
 }
 
 fn absolute_path(path: impl AsRef<Path>) -> io::Result<PathBuf> {

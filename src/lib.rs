@@ -8,8 +8,6 @@
 //! internal modules is much more likely to change. Some or all of these
 //! modules might be removed in the future.
 
-#![deny(unsafe_code)]
-
 mod macros;
 
 pub mod assets;
@@ -40,6 +38,8 @@ pub(crate) mod syntax_mapping;
 mod terminal;
 mod vscreen;
 pub(crate) mod wrapping;
+#[cfg(feature = "zero-copy")]
+mod zero_copy;
 
 pub use input::Input;
 pub use nonprintable_notation::NonprintableNotation;

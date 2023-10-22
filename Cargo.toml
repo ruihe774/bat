@@ -185,3 +185,4 @@ features = ["term"]
 lto = "thin"
 strip = true
 codegen-units = 1
+panic = "abort"

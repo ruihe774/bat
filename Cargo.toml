@@ -18,7 +18,6 @@ default = ["application"]
 # bat as a library.
 application = [
     "bugreport",
-    "git",
     "guesslang",
     "minimal-application",
 ]

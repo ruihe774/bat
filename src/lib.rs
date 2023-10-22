@@ -16,6 +16,7 @@ pub mod assets;
 pub mod config;
 pub mod controller;
 mod decorations;
+#[cfg(feature = "git")]
 mod diff;
 pub mod error;
 #[cfg(feature = "guesslang")]

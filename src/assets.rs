@@ -390,10 +390,7 @@ fn load_asset_bytes(
     )
 }
 
-fn asset_from_bytes<T: DeserializeOwned>(
-    bytes: Vec<u8>,
-    description: impl Display,
-) -> Result<T> {
+fn asset_from_bytes<T: DeserializeOwned>(bytes: Vec<u8>, description: impl Display) -> Result<T> {
     #[cfg(feature = "zero-copy")]
     let r = bincode::deserialize_from_custom(LeakySliceReader::from_leaky_vec(bytes));
     #[cfg(not(feature = "zero-copy"))]

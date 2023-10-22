@@ -13,14 +13,17 @@ use memmap2::MmapOptions;
 struct TolerentAllocator;
 
 unsafe impl GlobalAlloc for TolerentAllocator {
+    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         mi_malloc_aligned(layout.size(), layout.align()) as *mut u8
     }
 
+    #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         mi_zalloc_aligned(layout.size(), layout.align()) as *mut u8
     }
 
+    #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         let p = ptr as *mut c_void;
         if mi_is_in_heap_region(p) {
@@ -30,6 +33,7 @@ unsafe impl GlobalAlloc for TolerentAllocator {
         }
     }
 
+    #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
         let p = ptr as *mut c_void;
         if mi_is_in_heap_region(p) {
@@ -104,9 +108,8 @@ impl BufRead for LeakySliceReader {
 impl LeakySliceReader {
     fn get_byte_slice(&mut self, length: usize) -> bincode::Result<&'static mut [u8]> {
         if self.len < length {
-            return Err(Box::new(bincode::ErrorKind::Io(io::Error::new(
+            return Err(Box::new(bincode::ErrorKind::Io(io::Error::from(
                 io::ErrorKind::UnexpectedEof,
-                "",
             ))));
         }
         let slice = unsafe { std::slice::from_raw_parts_mut(self.ptr, length) };

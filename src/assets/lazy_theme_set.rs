@@ -23,7 +23,10 @@ pub struct LazyThemeSet {
 /// (load) the theme.
 #[derive(Debug, Serialize, Deserialize)]
 struct LazyTheme {
-    #[serde(serialize_with = "serialize_refcell_bytes", deserialize_with = "deserialize_refcell_bytes")]
+    #[serde(
+        serialize_with = "serialize_refcell_bytes",
+        deserialize_with = "deserialize_refcell_bytes"
+    )]
     serialized: RefCell<Vec<u8>>,
 
     #[serde(skip, default = "OnceCell::new")]

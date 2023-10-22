@@ -24,20 +24,20 @@ mod less;
 #[cfg(feature = "lessopen")]
 mod lessopen;
 pub mod line_range;
-pub(crate) mod nonprintable_notation;
+mod nonprintable_notation;
 mod output;
 #[cfg(feature = "paging")]
 mod pager;
 #[cfg(feature = "paging")]
-pub(crate) mod paging;
+mod paging;
 mod preprocessor;
 mod pretty_printer;
-pub(crate) mod printer;
+mod printer;
 pub mod style;
-pub(crate) mod syntax_mapping;
+mod syntax_mapping;
 mod terminal;
 mod vscreen;
-pub(crate) mod wrapping;
+mod wrapping;
 #[cfg(feature = "zero-copy")]
 mod zero_copy;
 

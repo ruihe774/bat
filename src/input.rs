@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use clircle::{Clircle, Identifier};
 
 use crate::error::*;
+#[cfg(feature = "zero-copy")]
+use crate::zero_copy::{create_file_mapped_leaky_slice, LeakySliceReader};
 
 /// A description of an Input source.
 /// This tells bat how to refer to the input.
@@ -137,7 +139,14 @@ impl Input {
                         file = input_identifier.into_inner().expect("The file was lost in the clircle::Identifier, this should not have happened...");
                     }
 
-                    InputReader::new(BufReader::new(file))
+                    #[cfg(feature = "zero-copy")]
+                    let r = unsafe { create_file_mapped_leaky_slice(&file) }.map_or_else(
+                        |_| InputReader::new(BufReader::new(file)),
+                        |slice| InputReader::new(LeakySliceReader::new(slice)),
+                    );
+                    #[cfg(not(feature = "zero-copy"))]
+                    let r = InputReader::new(BufReader::new(file));
+                    r
                 },
             }),
             InputKind::CustomReader(reader) => Ok(OpenedInput {
@@ -180,7 +189,11 @@ pub(crate) struct InputReader {
 
 impl InputReader {
     pub(crate) fn new<R: BufRead + 'static>(mut reader: R) -> InputReader {
-        let first_read = reader.fill_buf().ok().filter(|buf| !buf.is_empty());
+        let first_read = reader.fill_buf().ok().and_then(|buf| {
+            let limit = page_size::get().min(2 * 1024 * 1024);
+            let len = buf.len();
+            (len != 0).then_some(&buf[..limit.min(len)])
+        });
 
         let (first_read, content_type) = if let Some(first_read) = first_read {
             let content_type = inspect(first_read);
@@ -214,37 +227,67 @@ impl InputReader {
         }
     }
 
-    pub(crate) fn read_line(&mut self, buf: &mut Vec<u8>) -> io::Result<bool> {
-        use ContentType::*;
-        let delimiter: &[u8] = match self.content_type {
-            Some(UTF_16LE) => b"\n\0",
-            Some(UTF_16BE) => b"\0\n",
-            Some(UTF_32LE) => b"\n\0\0\0",
-            Some(UTF_32BE) => b"\0\0\0\n",
-            _ => b"\n",
-        };
+    fn read_char<const WIDTH: usize>(&mut self) -> io::Result<Option<[u8; WIDTH]>> {
+        let mut buffer = [0; WIDTH];
+        let mut read_bytes = 0;
+        while read_bytes < WIDTH {
+            let bytes = self.inner.read(&mut buffer[read_bytes..])?;
+            if bytes == 0 {
+                if read_bytes == 0 {
+                    return Ok(None);
+                } else {
+                    return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
+                }
+            }
+            read_bytes += bytes;
+        }
+        Ok(Some(buffer))
+    }
 
-        let mut inner_buf = [0, 0, 0, 0];
-        let read_buf = &mut inner_buf[..delimiter.len()];
+    fn scan_line<const WIDTH: usize>(
+        &mut self,
+        buf: &mut Vec<u8>,
+        delimiter: [u8; WIDTH],
+    ) -> io::Result<bool> {
         let mut r = Ok(false);
-        'outer: loop {
-            let mut read_bytes = 0;
-            while read_bytes < read_buf.len() {
-                let bytes = self.inner.read(&mut read_buf[read_bytes..])?;
-                if bytes == 0 {
-                    if read_bytes == 0 {
-                        break 'outer r;
-                    } else {
-                        break 'outer Err(io::Error::from(io::ErrorKind::UnexpectedEof));
+        loop {
+            let chunks = self.inner.fill_buf()?.chunks_exact(WIDTH);
+            let len = chunks.len() * WIDTH;
+            for (i, chunk) in chunks
+                .map(|slice| -> [u8; WIDTH] { slice.try_into().unwrap() })
+                .enumerate()
+            {
+                buf.extend_from_slice(chunk.as_slice());
+                if chunk == delimiter {
+                    self.inner.consume((i + 1) * WIDTH);
+                    return Ok(true);
+                }
+            }
+            if len != 0 {
+                self.inner.consume(len);
+                r = Ok(true);
+            }
+            match self.read_char()? {
+                Some(chunk) => {
+                    buf.extend_from_slice(chunk.as_slice());
+                    r = Ok(true);
+                    if chunk == delimiter {
+                        return Ok(true);
                     }
                 }
-                read_bytes += bytes;
+                None => return r,
             }
-            buf.extend_from_slice(read_buf);
-            r = Ok(true);
-            if read_buf == delimiter {
-                break r;
-            }
+        }
+    }
+
+    pub(crate) fn read_line(&mut self, buf: &mut Vec<u8>) -> io::Result<bool> {
+        use ContentType::*;
+        match self.content_type {
+            Some(UTF_16LE) => self.scan_line(buf, [b'\n', b'\0']),
+            Some(UTF_16BE) => self.scan_line(buf, [b'\0', b'\n']),
+            Some(UTF_32LE) => self.scan_line(buf, [b'\n', b'\0', b'\0', b'\0']),
+            Some(UTF_32BE) => self.scan_line(buf, [b'\0', b'\0', b'\0', b'\n']),
+            _ => self.scan_line(buf, [b'\n']),
         }
     }
 }

@@ -1,0 +1,13 @@
+diff --git syntaxes/02_Extra/SLS/SLS.sublime-syntax syntaxes/02_Extra/SLS/SLS.sublime-syntax
+index d57507d..755ac0a 100644
+--- syntaxes/02_Extra/SLS/SLS.sublime-syntax	
++++ syntaxes/02_Extra/SLS/SLS.sublime-syntax	
+@@ -13,7 +13,7 @@ contexts:
+     - match: |
+         (?x)
+         (?: ^ [ \t]* | [ \t]+ )
+-        (?:(\#) \p{Print}* )?
++        (?:(\#) [^\p{gc=Control}\p{gc=Unassigned}]* )?
+         (\n|\z)
+       scope: comment.line.number-sign.yaml
+       captures:

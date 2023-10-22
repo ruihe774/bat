@@ -15,8 +15,8 @@ contexts:
         (?x)
           !?[~-]{1,2}>\*?
           |<[~-]{1,2}!?
-          |\(\s* (?=    instanceof[\s)]|and[\s)]|or[\s)]|is[\s)]|isnt[\s)]|in[\s)]|import[\s)]|import\ all[\s)]     |\.|[-+/*%^&<>=|][\b\s)\w$]|\*\*|\%\%)
-          |      (?<=[\s(]instanceof|[\s(]and|[\s(]or|[\s(]is|[\s(]isnt|[\s(]in|[\s(]import|[\s(]import\ all|[\s(]do|\.|\*\*|\%\%|[\b\s(\w$][-+/*%^&<>=|]) \s*\)
+          |\(\s* (?=    instanceof[\s)]|and[\s)]|or[\s)]|is[\s)]|isnt[\s)]|in[\s)]|import[\s)]|import\ all[\s)]     |\.|[-+/*%^&<>=|][\<\>\s)\w$]|\*\*|\%\%)
+          |      (?<=[\s(]instanceof|[\s(]and|[\s(]or|[\s(]is|[\s(]isnt|[\s(]in|[\s(]import|[\s(]import\ all|[\s(]do|\.|\*\*|\%\%|[\<\>\s(\w$][-+/*%^&<>=|]) \s*\)
       scope: storage.type.function.livescript
     - match: \/\*
       captures:

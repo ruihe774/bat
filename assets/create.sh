@@ -52,14 +52,15 @@ bat cache --clear
     for patch in patches/*.patch; do
         patch --strip=0 < "$patch"
     done
+	find . -size 0 -name '*.sublime-syntax' -exec rm {} +
 )
 
 reverse_patches() {
     (
         cd "$ASSET_DIR"
-        for patch in patches/*.patch; do
-            patch --strip=0 --reverse <"$patch"
-        done
+		rm -r themes syntaxes
+		git submodule update > /dev/null
+		git checkout -- syntaxes themes
     )
 }
 

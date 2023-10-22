@@ -75,24 +75,24 @@ where
 }
 
 #[cfg(feature = "build-assets")]
-impl TryFrom<ThemeSet> for LazyThemeSet {
+impl TryFrom<syntect::highlighting::ThemeSet> for LazyThemeSet {
     type Error = Error;
 
-    /// To collect themes, a [`ThemeSet`] is needed. Once all desired themes
+    /// To collect themes, a [`syntect::highlighting::ThemeSet`] is needed. Once all desired themes
     /// have been added, we need a way to convert that into [`LazyThemeSet`] so
     /// that themes can be lazy-loaded later. This function does that
     /// conversion.
-    fn try_from(theme_set: ThemeSet) -> Result<Self> {
+    fn try_from(theme_set: syntect::highlighting::ThemeSet) -> Result<Self> {
         let mut lazy_theme_set = LazyThemeSet::default();
 
         for (name, theme) in theme_set.themes {
             // All we have to do is to serialize the theme
             let lazy_theme = LazyTheme {
-                serialized: crate::assets::build_assets::asset_to_contents(
+                serialized: RefCell::new(crate::assets::build_assets::asset_to_contents(
                     &theme,
                     &format!("theme {}", name),
                     false,
-                )?,
+                )?),
                 deserialized: OnceCell::new(),
             };
 

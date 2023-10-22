@@ -151,13 +151,17 @@ default-features = false
 git = "https://github.com/ruihe774/syntect.git"
 branch = "msk"
 default-features = false
-features = ["parsing", "regex-onig"]
+features = ["parsing", "regex-fancy"]
 
 [dependencies.ort]
 git = "https://github.com/ruihe774/ort.git"
 branch = "msk"
 optional = true
 default-features = false
+
+[patch.crates-io.fancy-regex]
+git = "https://github.com/ruihe774/fancy-regex.git"
+branch = "relative-backref"
 
 [target.'cfg(unix)'.dependencies.flate2]
 version = "1.0"

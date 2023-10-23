@@ -4,7 +4,9 @@ use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
+use bstr::{ByteSlice, ByteVec};
 use clircle::{Clircle, Identifier};
 
 use crate::error::*;
@@ -394,18 +396,23 @@ fn inspect(buffer: &[u8]) -> ContentType {
 }
 
 #[cfg(unix)]
-fn execuate_file(args: impl IntoIterator<Item = impl AsRef<OsStr>>, buffer: &[u8]) -> String {
-    use std::process::{Command, Stdio};
+fn execuate_file(args: impl IntoIterator<Item = impl AsRef<OsStr>>, buffer: &[u8]) -> Vec<u8> {
+    let failure_msg = "failed to execuate /usr/bin/file";
     let mut child = Command::new("/usr/bin/file")
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("failed to execuate /usr/bin/file");
-    child.stdin.take().unwrap().write_all(buffer).unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(output.status.success(), "/usr/bin/file exited with failure");
-    let mut s = String::from_utf8(output.stdout).unwrap();
+        .expect(failure_msg);
+    child
+        .stdin
+        .take()
+        .expect(failure_msg)
+        .write(buffer)
+        .expect(failure_msg);
+    let output = child.wait_with_output().expect(failure_msg);
+    assert!(output.status.success(), "{}", failure_msg);
+    let mut s = output.stdout;
     s.truncate(s.trim_end().len());
     s
 }
@@ -413,15 +420,16 @@ fn execuate_file(args: impl IntoIterator<Item = impl AsRef<OsStr>>, buffer: &[u8
 #[cfg(unix)]
 fn inspect(buffer: &[u8]) -> ContentType {
     let encoding = execuate_file(["--brief", "--mime-encoding", "-"], buffer);
-    match encoding.as_str() {
-        "us-ascii" | "utf-8" | "unknown-8bit" => ContentType::UTF_8,
-        "utf-16le" => ContentType::UTF_16LE,
-        "utf-16be" => ContentType::UTF_16BE,
-        "utf-32le" => ContentType::UTF_32LE,
-        "utf-32be" => ContentType::UTF_32BE,
+    match encoding.as_slice() {
+        b"us-ascii" | b"utf-8" | b"unknown-8bit" => ContentType::UTF_8,
+        b"utf-16le" => ContentType::UTF_16LE,
+        b"utf-16be" => ContentType::UTF_16BE,
+        b"utf-32le" => ContentType::UTF_32LE,
+        b"utf-32be" => ContentType::UTF_32BE,
         _ => ContentType::BINARY({
             let format = execuate_file(["--brief", "-"], buffer);
-            (&format != "data" && &format != "very short file (no magic)").then_some(format)
+            (&format != b"data" && &format != b"very short file (no magic)")
+                .then(|| format.into_string_lossy())
         }),
     }
 }

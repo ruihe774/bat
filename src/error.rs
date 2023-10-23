@@ -16,8 +16,6 @@ pub enum Error {
     ParseIntError(#[from] ::std::num::ParseIntError),
     #[error(transparent)]
     GlobParsingError(#[from] ::globset::Error),
-    #[error(transparent)]
-    SerdeYamlError(#[from] ::serde_yaml::Error),
     #[error("unable to detect syntax for {0}")]
     UndetectedSyntax(String),
     #[error("unknown syntax: '{0}'")]
@@ -56,15 +54,6 @@ pub fn default_error_handler(error: &Error, output: &mut dyn Write) {
     match error {
         Error::Io(ref io_error) if io_error.kind() == ::std::io::ErrorKind::BrokenPipe => {
             ::std::process::exit(0);
-        }
-        Error::SerdeYamlError(_) => {
-            writeln!(
-                output,
-                "{}: Error while parsing metadata.yaml file: {}",
-                Red.paint("[bat error]"),
-                error
-            )
-            .ok();
         }
         _ => {
             writeln!(output, "{}: {}", Red.paint("[bat error]"), error).ok();

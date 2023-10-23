@@ -40,7 +40,7 @@ pub fn expand_tabs(line: &str, width: usize, cursor: &mut usize) -> String {
 fn try_parse_utf8_char(input: &[u8]) -> Option<(char, usize)> {
     match bstr::decode_utf8(input) {
         (Some(char), size) => Some((char, size)),
-        (None, _) => None
+        (None, _) => None,
     }
 }
 

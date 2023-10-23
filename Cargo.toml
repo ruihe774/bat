@@ -72,6 +72,7 @@ build-assets = [
 aho-corasick = "1.1"
 ansi_colours = "1.2"
 bincode = "1.0"
+bstr = "1.7"
 clircle = "0.4"
 console = "0.15"
 globset = "0.4"

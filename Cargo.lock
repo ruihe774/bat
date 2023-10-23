@@ -109,6 +109,7 @@ dependencies = [
  "ansi_colours",
  "assert_cmd",
  "bincode",
+ "bstr",
  "bugreport",
  "clap",
  "clircle",

@@ -1,7 +1,19 @@
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::str::FromStr;
 
 use crate::error::*;
+
+#[derive(Debug)]
+pub struct UnknownStyle(String);
+
+impl Display for UnknownStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unknown style '{}'", self.0)
+    }
+}
+
+impl std::error::Error for UnknownStyle {}
 
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
@@ -68,7 +80,7 @@ impl FromStr for StyleComponent {
             "plain" => Ok(StyleComponent::Plain),
             // for backward compatibility, default is to full
             "default" => Ok(StyleComponent::Full),
-            _ => Err(format!("Unknown style '{}'", s).into()),
+            _ => Err(UnknownStyle(s.to_owned()).into()),
         }
     }
 }

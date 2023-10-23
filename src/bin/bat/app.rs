@@ -70,9 +70,8 @@ impl App {
             let mut cli_args = wild::args_os();
 
             // Read arguments from bats config file
-            let mut args = get_args_from_env_opts_var()
-                .unwrap_or_else(get_args_from_config_file)
-                .map_err(|_| "Could not parse configuration file")?;
+            let mut args =
+                get_args_from_env_opts_var().unwrap_or_else(get_args_from_config_file)?;
 
             // Selected env vars supersede config vars
             args.extend(get_args_from_env_vars());
@@ -305,7 +304,7 @@ impl App {
             && files.is_some()
             && filenames.as_ref().map(|v| v.len()) != files.as_ref().map(|v| v.len())
         {
-            return Err("Must be one file name per input type.".into());
+            return Err(Error::msg("must be one file name per input type"));
         }
 
         let mut filenames_or_none: Box<dyn Iterator<Item = Option<&Path>>> = match filenames {

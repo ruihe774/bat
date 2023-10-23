@@ -55,8 +55,7 @@ impl<'a> SyntaxMapping<'a> {
                     let mut v: Vec<u8> = s.into();
                     v.reverse();
                     v
-                }))
-                .map_err(|err| Error::from(err.to_string()))?,
+                }))?,
         })
     }
 

@@ -14,7 +14,7 @@ use syntect::parsing::SyntaxSet;
 
 use unicode_width::UnicodeWidthChar;
 
-use crate::assets::{HighlightingAssets, SyntaxReferenceInSet};
+use crate::assets::{HighlightingAssets, SyntaxReferenceInSet, SyntaxUndetected};
 use crate::config::Config;
 #[cfg(feature = "git")]
 use crate::decorations::LineChangesDecoration;
@@ -111,14 +111,7 @@ impl<'a> Printer for SimplePrinter<'a> {
                 match handle {
                     OutputHandle::IoWrite(handle) => handle.write_all(line_buffer)?,
                     OutputHandle::FmtWrite(handle) => {
-                        write!(
-                            handle,
-                            "{}",
-                            std::str::from_utf8(line_buffer).map_err(|_| Error::Msg(
-                                "encountered invalid utf8 while printing to non-io buffer"
-                                    .to_string()
-                            ))?
-                        )?;
+                        write!(handle, "{}", std::str::from_utf8(line_buffer)?)?;
                     }
                 }
             };
@@ -216,10 +209,15 @@ impl<'a> InteractivePrinter<'a> {
             let syntax_in_set =
                 match assets.get_syntax(config.language, input, &config.syntax_mapping) {
                     Ok(syntax_in_set) => syntax_in_set,
-                    Err(Error::UndetectedSyntax(_)) => assets
-                        .find_syntax_by_name("Plain Text")
-                        .expect("A plain text syntax is available"),
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        if e.downcast_ref::<SyntaxUndetected>().is_some() {
+                            assets
+                                .find_syntax_by_name("Plain Text")
+                                .expect("no syntax for plain text")
+                        } else {
+                            return Err(e);
+                        }
+                    }
                 };
 
             Some(HighlighterFromSet::new(syntax_in_set, theme))

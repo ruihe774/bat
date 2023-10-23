@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
+use std::fmt::Display;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -12,6 +13,28 @@ use clircle::{Clircle, Identifier};
 use crate::error::*;
 #[cfg(feature = "zero-copy")]
 use crate::zero_copy::{create_file_mapped_leaky_slice, LeakySliceReader};
+
+#[derive(Debug)]
+pub struct IoCircle(PathBuf);
+
+impl Display for IoCircle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IO circle detected for '{}'", self.0.display())
+    }
+}
+
+impl std::error::Error for IoCircle {}
+
+#[derive(Debug)]
+pub struct IsDirectory(PathBuf);
+
+impl Display for IsDirectory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}' is a directory", self.0.display())
+    }
+}
+
+impl std::error::Error for IsDirectory {}
 
 /// A description of an Input source.
 /// This tells bat how to refer to the input.
@@ -101,10 +124,9 @@ impl Input {
         match self.kind {
             InputKind::StdIn => {
                 if let Some(stdout) = stdout_identifier {
-                    let input_identifier = Identifier::try_from(clircle::Stdio::Stdin)
-                        .map_err(|e| format!("Stdin: Error identifying file: {}", e))?;
+                    let input_identifier = Identifier::try_from(clircle::Stdio::Stdin)?;
                     if stdout.surely_conflicts_with(&input_identifier) {
-                        return Err("IO circle detected. The input from stdin is also an output. Aborting to avoid infinite loop.".into());
+                        return Err(IoCircle("stdin".into()).into());
                     }
                 }
 
@@ -121,24 +143,17 @@ impl Input {
                 kind: OpenedInputKind::OrdinaryFile(path.clone()),
                 description,
                 reader: {
-                    let mut file =
-                        File::open(&path).map_err(|e| format!("'{}': {}", path.display(), e))?;
+                    let mut file = File::open(&path)?;
                     if file.metadata()?.is_dir() {
-                        return Err(format!("'{}' is a directory.", path.display()).into());
+                        return Err(IsDirectory(path).into());
                     }
 
                     if let Some(stdout) = stdout_identifier {
-                        let input_identifier = Identifier::try_from(file).map_err(|e| {
-                            format!("{}: Error identifying file: {}", path.display(), e)
-                        })?;
+                        let input_identifier = Identifier::try_from(file)?;
                         if stdout.surely_conflicts_with(&input_identifier) {
-                            return Err(format!(
-                                "IO circle detected. The input from '{}' is also an output. Aborting to avoid infinite loop.",
-                                path.display()
-                            )
-                            .into());
+                            return Err(IoCircle(path).into());
                         }
-                        file = input_identifier.into_inner().expect("The file was lost in the clircle::Identifier, this should not have happened...");
+                        file = input_identifier.into_inner().unwrap();
                     }
 
                     #[cfg(feature = "zero-copy")]

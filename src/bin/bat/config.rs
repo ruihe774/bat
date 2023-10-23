@@ -25,7 +25,7 @@ pub fn system_config_file() -> PathBuf {
 pub fn config_file() -> PathBuf {
     env::var("BAT_CONFIG_PATH")
         .ok()
-        .map(PathBuf::from)
+        .map(|path| fs::canonicalize(path).expect("invalid env BAT_CONFIG_PATH"))
         .unwrap_or_else(|| PROJECT_DIRS.config_dir().join("config"))
 }
 
@@ -46,17 +46,8 @@ pub fn generate_config_file() -> bat::error::Result<()> {
             return Ok(());
         }
     } else {
-        let config_dir = config_file.parent();
-        match config_dir {
-            Some(path) => fs::create_dir_all(path)?,
-            None => {
-                return Err(format!(
-                    "Unable to write config file to: {}",
-                    config_file.to_string_lossy()
-                )
-                .into());
-            }
-        }
+        let config_dir = config_file.parent().expect("invalid config path");
+        fs::create_dir_all(config_dir)?
     }
 
     let default_config = r#"# This is `bat`s configuration file. Each line either contains a comment or
@@ -86,13 +77,7 @@ pub fn generate_config_file() -> bat::error::Result<()> {
 #--map-syntax ".ignore:Git Ignore"
 "#;
 
-    fs::write(&config_file, default_config).map_err(|e| {
-        format!(
-            "Failed to create config file at '{}': {}",
-            config_file.to_string_lossy(),
-            e
-        )
-    })?;
+    fs::write(&config_file, default_config)?;
 
     println!(
         "Success! Config file written to {}",

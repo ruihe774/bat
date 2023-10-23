@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::io::{self, Write};
 #[cfg(feature = "paging")]
 use std::process::Child;
@@ -9,6 +10,20 @@ use crate::less::{retrieve_less_version, LessVersion};
 use crate::paging::PagingMode;
 #[cfg(feature = "paging")]
 use crate::wrapping::WrappingMode;
+
+#[derive(Debug)]
+pub struct InvalidPagerValueBat;
+
+impl Display for InvalidPagerValueBat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "use of bat as a pager is disallowed to avoid infinite recursion"
+        )
+    }
+}
+
+impl std::error::Error for InvalidPagerValueBat {}
 
 #[cfg(feature = "paging")]
 #[derive(Debug, PartialEq)]
@@ -51,8 +66,7 @@ impl OutputType {
         use crate::pager::{self, PagerKind, PagerSource};
         use std::process::{Command, Stdio};
 
-        let pager_opt =
-            pager::get_pager(pager_from_config).map_err(|_| "Could not parse pager command.")?;
+        let pager_opt = pager::get_pager(pager_from_config)?;
 
         let pager = match pager_opt {
             Some(pager) => pager,
@@ -60,7 +74,7 @@ impl OutputType {
         };
 
         if pager.kind == PagerKind::Bat {
-            return Err(Error::InvalidPagerValueBat);
+            return Err(InvalidPagerValueBat.into());
         }
 
         let resolved_path = match grep_cli::resolve_binary(&pager.bin) {
@@ -148,7 +162,7 @@ impl OutputType {
             OutputType::Pager(ref mut command) => command
                 .stdin
                 .as_mut()
-                .ok_or("Could not open stdin for pager")?,
+                .expect("could not open stdin for pager"),
             OutputType::Stdout(ref mut handle) => handle,
         })
     }

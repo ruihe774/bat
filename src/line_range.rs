@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::error::*;
 
 #[derive(Debug, Clone)]
@@ -15,6 +17,17 @@ impl Default for LineRange {
     }
 }
 
+#[derive(Debug)]
+pub struct InvalidLineRange(String);
+
+impl Display for InvalidLineRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid line ranges '{}'", self.0)
+    }
+}
+
+impl std::error::Error for InvalidLineRange {}
+
 impl LineRange {
     pub fn new(from: usize, to: usize) -> Self {
         LineRange {
@@ -30,51 +43,48 @@ impl LineRange {
     fn parse_range(range_raw: &str) -> Result<LineRange> {
         let mut new_range = LineRange::default();
 
-        if range_raw.bytes().next().ok_or("Empty line range")? == b':' {
-            new_range.upper = range_raw[1..].parse()?;
+        let invalid = || InvalidLineRange(range_raw.to_owned());
+
+        if range_raw.bytes().next().ok_or_else(invalid)? == b':' {
+            new_range.upper = range_raw[1..].parse().map_err(|_| invalid())?;
             return Ok(new_range);
-        } else if range_raw.bytes().last().ok_or("Empty line range")? == b':' {
-            new_range.lower = range_raw[..range_raw.len() - 1].parse()?;
+        } else if range_raw.bytes().last().ok_or_else(invalid)? == b':' {
+            new_range.lower = range_raw[..range_raw.len() - 1]
+                .parse()
+                .map_err(|_| invalid())?;
             return Ok(new_range);
         }
 
         let line_numbers: Vec<&str> = range_raw.split(':').collect();
         match line_numbers.len() {
             1 => {
-                new_range.lower = line_numbers[0].parse()?;
+                new_range.lower = line_numbers[0].parse().map_err(|_| invalid())?;
                 new_range.upper = new_range.lower;
                 Ok(new_range)
             }
             2 => {
-                new_range.lower = line_numbers[0].parse()?;
+                new_range.lower = line_numbers[0].parse().map_err(|_| invalid())?;
                 let first_byte = line_numbers[1].bytes().next();
 
                 new_range.upper = if first_byte == Some(b'+') {
-                    let more_lines = &line_numbers[1][1..]
-                        .parse()
-                        .map_err(|_| "Invalid character after +")?;
+                    let more_lines = &line_numbers[1][1..].parse().map_err(|_| invalid())?;
                     new_range.lower.saturating_add(*more_lines)
                 } else if first_byte == Some(b'-') {
                     // this will prevent values like "-+5" even though "+5" is valid integer
                     if line_numbers[1][1..].bytes().next() == Some(b'+') {
-                        return Err("Invalid character after -".into());
+                        return Err(invalid().into());
                     }
-                    let prior_lines = &line_numbers[1][1..]
-                        .parse()
-                        .map_err(|_| "Invalid character after -")?;
+                    let prior_lines = &line_numbers[1][1..].parse().map_err(|_| invalid())?;
                     let prev_lower = new_range.lower;
                     new_range.lower = new_range.lower.saturating_sub(*prior_lines);
                     prev_lower
                 } else {
-                    line_numbers[1].parse()?
+                    line_numbers[1].parse().map_err(|_| invalid())?
                 };
 
                 Ok(new_range)
             }
-            _ => Err(
-                "Line range contained more than one ':' character. Expected format: 'N' or 'N:M'"
-                    .into(),
-            ),
+            _ => Err(invalid().into()),
         }
     }
 

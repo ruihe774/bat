@@ -44,6 +44,28 @@ macro_rules! include_asset {
 }
 
 #[derive(Debug)]
+pub struct UnknownSyntax(String);
+
+impl Display for UnknownSyntax {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unknown syntax '{}'", self.0)
+    }
+}
+
+impl std::error::Error for UnknownSyntax {}
+
+#[derive(Debug)]
+pub struct SyntaxUndetected(PathBuf);
+
+impl Display for SyntaxUndetected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unable to detect syntax for '{}'", self.0.display())
+    }
+}
+
+impl std::error::Error for SyntaxUndetected {}
+
+#[derive(Debug)]
 pub struct HighlightingAssets {
     syntax_set: SyntaxSet,
     theme_set: LazyThemeSet,
@@ -179,15 +201,15 @@ impl HighlightingAssets {
         mapping: &SyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
         let orignal_path = path.as_ref();
-        let path_string = mapping.strip_ignored_suffixes(absolute_path(path.as_ref())?.into());
-        let path = Path::new(path_string.as_os_str());
-        let undetected = Error::UndetectedSyntax(orignal_path.to_string_lossy().into_owned());
+        let path: PathBuf = mapping
+            .strip_ignored_suffixes(absolute_path(path.as_ref())?.into())
+            .into();
         let syntax_match = mapping.get_syntax_for(&path);
         match syntax_match {
-            Some(MappingTarget::MapToUnknown) => Err(undetected),
+            Some(MappingTarget::MapToUnknown) => Err(SyntaxUndetected(path).into()),
             Some(MappingTarget::MapTo(syntax_name)) => self
                 .find_syntax_by_name(syntax_name)
-                .ok_or_else(|| Error::UnknownSyntax(syntax_name.to_owned())),
+                .ok_or_else(|| UnknownSyntax(syntax_name.to_owned()).into()),
             _ => {
                 if let Some(sr) = path
                     .file_name()
@@ -195,11 +217,11 @@ impl HighlightingAssets {
                 {
                     Ok(sr)
                 } else if let Some(MappingTarget::MapExtensionToUnknown) = syntax_match {
-                    Err(undetected)
+                    Err(SyntaxUndetected(path).into())
                 } else {
                     path.extension()
                         .and_then(|name| self.find_syntax_by_extension(name))
-                        .ok_or(undetected)
+                        .ok_or(SyntaxUndetected(path).into())
                 }
             }
         }
@@ -235,20 +257,18 @@ impl HighlightingAssets {
             return syntax_set
                 .find_syntax_by_token(language)
                 .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set })
-                .ok_or_else(|| Error::UnknownSyntax(language.to_owned()));
+                .ok_or_else(|| UnknownSyntax(language.to_owned()).into());
         }
 
         let path = input.path();
-        let path_syntax = if let Some(path) = path {
+        let mut path_syntax = if let Some(path) = path {
             self.get_syntax_for_path(path, mapping)
         } else {
-            Err(Error::UndetectedSyntax("[unknown]".into()))
+            Err(SyntaxUndetected("[unknown]".into()).into())
         };
 
-        match path_syntax {
-            // If a path wasn't provided, or if path based syntax detection
-            // above failed, we fall back to first-line syntax detection.
-            Err(Error::UndetectedSyntax(path)) => {
+        if let Err(e) = &mut path_syntax {
+            if let Some(SyntaxUndetected(path)) = e.downcast_mut() {
                 if let Some(sr) = self.get_first_line_syntax(&mut input.reader)? {
                     return Ok(sr);
                 }
@@ -256,10 +276,11 @@ impl HighlightingAssets {
                 if let Some(sr) = self.get_syntax_by_guesslang(&mut input.reader)? {
                     return Ok(sr);
                 }
-                Err(Error::UndetectedSyntax(path))
+                return Err(SyntaxUndetected(std::mem::take(path)).into());
             }
-            _ => path_syntax,
         }
+
+        path_syntax
     }
 
     pub(crate) fn find_syntax_by_name(&self, syntax_name: &str) -> Option<SyntaxReferenceInSet> {
@@ -392,10 +413,11 @@ fn load_asset_bytes(
 
 fn asset_from_bytes<T: DeserializeOwned>(bytes: Vec<u8>, description: impl Display) -> Result<T> {
     #[cfg(feature = "zero-copy")]
-    let r = bincode::deserialize_from_custom(LeakySliceReader::from_leaky_vec(bytes));
+    return Ok(bincode::deserialize_from_custom(
+        LeakySliceReader::from_leaky_vec(bytes),
+    )?);
     #[cfg(not(feature = "zero-copy"))]
-    let r = bincode::deserialize(bytes.as_slice());
-    r.map_err(|_| format!("Could not parse {}", description).into())
+    return Ok(bincode::deserialize(bytes.as_slice())?);
 }
 
 fn absolute_path(path: impl AsRef<Path>) -> io::Result<PathBuf> {

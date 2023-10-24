@@ -50,6 +50,8 @@ pub(crate) unsafe fn create_file_mapped_leaky_slice(file: &File) -> io::Result<&
     let ptr = mmap.as_mut_ptr();
     let len = mmap.len();
     let slice = std::slice::from_raw_parts_mut(ptr, len);
+    #[cfg(debug_assertions)]
+    let mmap = mmap.make_read_only().unwrap();
     forget(mmap);
     Ok(slice)
 }
@@ -58,6 +60,8 @@ pub(crate) unsafe fn create_leaky_slice(len: usize) -> io::Result<&'static mut [
     let mut mmap = MmapOptions::new().len(len).map_anon()?;
     let ptr = mmap.as_mut_ptr();
     let slice = std::slice::from_raw_parts_mut(ptr, len);
+    #[cfg(debug_assertions)]
+    let mmap = mmap.make_read_only().unwrap();
     forget(mmap);
     Ok(slice)
 }

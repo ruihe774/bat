@@ -82,6 +82,7 @@ bincode = "1.0"
 bstr = "1.7"
 clircle = "0.4"
 console = "0.15"
+flate2 = "1.0"
 globset = "0.4"
 nu-ansi-term = "0.49"
 once_cell = "1.18"
@@ -169,13 +170,7 @@ default-features = false
 git = "https://github.com/ruihe774/fancy-regex.git"
 branch = "relative-backref"
 
-[target.'cfg(unix)'.dependencies.flate2]
-version = "1.0"
-default-features = false
-features = ["zlib"]
-
 [target.'cfg(not(unix))'.dependencies]
-flate2 = "1.0"
 content_inspector = "0.2"
 
 [dev-dependencies]

@@ -90,7 +90,7 @@ pub(crate) struct OpenedInput {
 
 impl OpenedInput {
     pub(crate) fn path(&self) -> Option<&Path> {
-        self.description.name.as_ref().map(|name| Path::new(name))
+        self.description.name.as_ref().map(Path::new)
     }
 }
 
@@ -180,7 +180,7 @@ impl Input {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ContentType {
     /// "binary" data
-    BINARY(Option<String>),
+    Binary(Option<String>),
 
     /// UTF-8 encoded "text" data
     UTF_8,
@@ -311,7 +311,7 @@ impl InputReader {
 
 impl ContentType {
     pub(crate) fn is_binary(&self) -> bool {
-        matches!(self, ContentType::BINARY(_))
+        matches!(self, ContentType::Binary(_))
     }
 
     pub(crate) fn is_text(&self) -> bool {
@@ -393,7 +393,7 @@ pub(crate) fn decode<'a>(
             }
             s.into()
         }
-        BINARY(_) => return None,
+        Binary(_) => return None,
     })
 }
 
@@ -406,7 +406,7 @@ fn inspect(buffer: &[u8]) -> ContentType {
         UTF_16BE => ContentType::UTF_16BE,
         UTF_32LE => ContentType::UTF_32LE,
         UTF_32BE => ContentType::UTF_32BE,
-        BINARY => ContentType::BINARY(None),
+        BINARY => ContentType::Binary(None),
     }
 }
 
@@ -419,7 +419,7 @@ fn execuate_file(args: impl IntoIterator<Item = impl AsRef<OsStr>>, buffer: &[u8
         .stdout(Stdio::piped())
         .spawn()
         .expect(failure_msg);
-    child
+    _ = child
         .stdin
         .take()
         .expect(failure_msg)
@@ -441,7 +441,7 @@ fn inspect(buffer: &[u8]) -> ContentType {
         b"utf-16be" => ContentType::UTF_16BE,
         b"utf-32le" => ContentType::UTF_32LE,
         b"utf-32be" => ContentType::UTF_32BE,
-        _ => ContentType::BINARY({
+        _ => ContentType::Binary({
             let format = execuate_file(["--brief", "-"], buffer);
             (&format != b"data" && &format != b"very short file (no magic)")
                 .then(|| format.into_string_lossy())

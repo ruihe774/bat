@@ -299,6 +299,6 @@ impl<'a> PrettyPrinter<'a> {
 
         // Run the controller
         let controller = Controller::new(&self.config, &self.assets);
-        controller.run(inputs.into_iter().map(|i| i.into()).collect(), None)
+        controller.run(inputs, None)
     }
 }

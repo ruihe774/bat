@@ -294,7 +294,6 @@ impl HighlightingAssets {
                 path: "UNKNOWN".into(),
             }
             .into())
-            .into()
         };
 
         if path_syntax
@@ -495,7 +494,7 @@ fn absolute_path(path: impl AsRef<Path>) -> io::Result<PathBuf> {
             Component::CurDir => (),
         };
     }
-    pathbuf.map_or_else(env::current_dir, |path| Ok(path))
+    pathbuf.map_or_else(env::current_dir, Ok)
 }
 
 #[cfg(test)]

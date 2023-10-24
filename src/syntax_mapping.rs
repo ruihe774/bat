@@ -1,10 +1,10 @@
 use std::{ffi::OsString, path::Path};
 
-use crate::error::Result;
-
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, Anchored, Input, MatchKind, StartKind};
 use globset::{Candidate, Glob, GlobSet, GlobSetBuilder};
 use os_str_bytes::RawOsString;
+
+use crate::error::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MappingTarget<'a> {
@@ -67,7 +67,7 @@ impl<'a> SyntaxMapping<'a> {
                 .map(|(s, t)| (Glob::new(s).expect("invalid builtin syntax mapping"), t)),
             include!("../assets/ignored_suffixes.ron")
                 .into_iter()
-                .map(|s| String::from(s)),
+                .map(String::from),
         )
         .expect("invalid builtin syntax mapping")
     }
@@ -82,7 +82,7 @@ impl<'a> SyntaxMapping<'a> {
             .unwrap_or_default();
         path_matches
             .into_iter()
-            .chain(name_matches.into_iter())
+            .chain(name_matches)
             .max()
             .map(|i| self.targets[i])
     }

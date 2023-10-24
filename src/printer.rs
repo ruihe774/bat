@@ -339,7 +339,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
                                 .as_ref()
                         )
                     } else {
-                        format!("{}", input.description.kind)
+                        input.description.kind.to_owned()
                     },
                 )?;
             } else if self.config.style_components.grid() {
@@ -349,8 +349,8 @@ impl<'a> Printer for InteractivePrinter<'a> {
         }
 
         let mode = match self.content_type {
-            Some(ContentType::BINARY(None)) => "   <BINARY>".to_owned(),
-            Some(ContentType::BINARY(Some(ref binary_type))) => {
+            Some(ContentType::Binary(None)) => "   <BINARY>".to_owned(),
+            Some(ContentType::Binary(Some(ref binary_type))) => {
                 format!("   <BINARY> {}", binary_type)
             }
             Some(ContentType::UTF_16LE) => "   <UTF-16LE>".to_owned(),
@@ -461,7 +461,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
             match self
                 .content_type
                 .as_ref()
-                .and_then(|content_type| decode(line_buffer, &content_type, line_number == 1))
+                .and_then(|content_type| decode(line_buffer, content_type, line_number == 1))
             {
                 Some(line) => line,
                 None => return Ok(()),

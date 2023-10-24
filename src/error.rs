@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
-pub type Error = anyhow::Error;
-pub type Result<T> = anyhow::Result<T>;
+pub(crate) use anyhow::Context;
+pub use anyhow::{Error, Result};
 
 pub fn default_error_handler(error: &Error, output: &mut dyn Write) {
     use nu_ansi_term::Color::Red;

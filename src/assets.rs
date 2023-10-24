@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use syntect::highlighting::Theme;
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
-use crate::error::Result;
+use crate::error::*;
 #[cfg(feature = "guesslang")]
 use crate::guesslang::GuessLang;
 use crate::input::{InputReader, OpenedInput};
@@ -31,14 +31,14 @@ mod lazy_theme_set;
 #[cfg(feature = "guesslang")]
 macro_rules! include_asset_bytes {
     ($asset_path:literal, $cache_dir:expr) => {
-        load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir).map_err(|e| {
-            e.context(format!(
+        load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir).with_context(|| {
+            format!(
                 "failed to load asset '{}'",
                 Path::new($asset_path)
                     .file_name()
                     .unwrap()
                     .to_string_lossy()
-            ))
+            )
         })
     };
 }
@@ -47,14 +47,14 @@ macro_rules! include_asset {
     ($asset_path:literal, $cache_dir:expr) => {
         load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir)
             .and_then(|bytes| asset_from_bytes(bytes))
-            .map_err(|e| {
-                e.context(format!(
+            .with_context(|| {
+                format!(
                     "failed to load asset '{}'",
                     Path::new($asset_path)
                         .file_name()
                         .unwrap()
                         .to_string_lossy()
-                ))
+                )
             })
     };
 }

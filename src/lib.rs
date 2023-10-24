@@ -44,7 +44,7 @@ mod zero_copy;
 pub use input::Input;
 pub use nonprintable_notation::NonprintableNotation;
 pub use pretty_printer::{PrettyPrinter, Syntax};
-pub use syntax_mapping::{MappingTarget, SyntaxMapping};
+pub use syntax_mapping::{MappingTarget, SyntaxMapping, SyntaxMappingBuilder};
 pub use wrapping::WrappingMode;
 
 #[cfg(feature = "paging")]

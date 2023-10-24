@@ -230,14 +230,19 @@ impl HighlightingAssets {
         let syntax_match = mapping.get_syntax_for(&path);
         match syntax_match {
             Some(MappingTarget::MapToUnknown) => Err(undetected()),
-            Some(MappingTarget::MapTo(syntax_name)) => {
-                self.find_syntax_by_name(syntax_name).ok_or_else(|| {
+            Some(MappingTarget::MapTo(syntax_name)) => self
+                .syntax_set
+                .find_syntax_by_token(syntax_name)
+                .map(|syntax| SyntaxReferenceInSet {
+                    syntax,
+                    syntax_set: &self.syntax_set,
+                })
+                .ok_or_else(|| {
                     UnknownSyntax {
                         name: syntax_name.to_owned(),
                     }
                     .into()
-                })
-            }
+                }),
             _ => {
                 if let Some(sr) = path
                     .file_name()

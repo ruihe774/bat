@@ -1,10 +1,10 @@
 use std::{ffi::OsString, path::Path};
 
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, Anchored, Input, MatchKind, StartKind};
-use globset::{Candidate, Glob, GlobSet, GlobSetBuilder};
+use globset::{Candidate, Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use os_str_bytes::RawOsString;
 
-use crate::error::*;
+use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MappingTarget<'a> {
@@ -59,19 +59,6 @@ impl<'a> SyntaxMapping<'a> {
         })
     }
 
-    pub fn builtin() -> Self {
-        use MappingTarget::*;
-        Self::new(
-            include!("../assets/syntax_mapping.ron")
-                .into_iter()
-                .map(|(s, t)| (Glob::new(s).expect("invalid builtin syntax mapping"), t)),
-            include!("../assets/ignored_suffixes.ron")
-                .into_iter()
-                .map(String::from),
-        )
-        .expect("invalid builtin syntax mapping")
-    }
-
     pub(crate) fn get_syntax_for(&self, path: impl AsRef<Path>) -> Option<MappingTarget> {
         let candidate_path = Candidate::new(path.as_ref());
         let candidate_filename = Path::new(path.as_ref()).file_name().map(Candidate::new);
@@ -110,5 +97,68 @@ impl<'a> Default for SyntaxMapping<'a> {
             globset: Default::default(),
             ignored_suffixes: AhoCorasick::new(patterns).unwrap(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SyntaxMappingBuilder<'a> {
+    pub mapping: Vec<(Glob, MappingTarget<'a>)>,
+    pub ignored_suffixes: Vec<String>,
+}
+
+impl<'a> SyntaxMappingBuilder<'a> {
+    pub fn new() -> Self {
+        SyntaxMappingBuilder {
+            mapping: Vec::new(),
+            ignored_suffixes: Vec::new(),
+        }
+    }
+
+    pub fn with_builtin(&mut self) -> &mut Self {
+        use MappingTarget::*;
+        self.mapping.extend(
+            include!("../assets/syntax_mapping.ron")
+                .into_iter()
+                .map(|(s, t)| {
+                    (
+                        GlobBuilder::new(s)
+                            .case_insensitive(true)
+                            .literal_separator(true)
+                            .build()
+                            .expect("invalid builtin syntax mapping"),
+                        t,
+                    )
+                }),
+        );
+        self.ignored_suffixes.extend(
+            include!("../assets/ignored_suffixes.ron")
+                .into_iter()
+                .map(|s| s.to_owned()),
+        );
+        self
+    }
+
+    pub fn build(self) -> Result<SyntaxMapping<'a>> {
+        SyntaxMapping::new(self.mapping, self.ignored_suffixes)
+    }
+
+    pub fn map_syntax<'b>(
+        &mut self,
+        glob: &'b str,
+        target: MappingTarget<'a>,
+    ) -> Result<&mut Self> {
+        self.mapping.push((
+            GlobBuilder::new(glob)
+                .case_insensitive(true)
+                .literal_separator(true)
+                .build()?,
+            target,
+        ));
+        Ok(self)
+    }
+
+    pub fn ignored_suffix<'b>(&mut self, suffix: String) -> &mut Self {
+        self.ignored_suffixes.push(suffix);
+        self
     }
 }

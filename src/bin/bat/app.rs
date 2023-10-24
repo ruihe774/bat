@@ -8,6 +8,7 @@ use crate::{
     config::{get_args_from_config_file, get_args_from_env_opts_var, get_args_from_env_vars},
 };
 use bat::input::InputKind;
+use bat::{MappingTarget, SyntaxMappingBuilder};
 use clap::ArgMatches;
 
 use console::Term;
@@ -20,7 +21,7 @@ use bat::{
     input::Input,
     line_range::{HighlightedLineRanges, LineRange, LineRanges},
     style::{StyleComponent, StyleComponents},
-    NonprintableNotation, PagingMode, SyntaxMapping, WrappingMode,
+    NonprintableNotation, PagingMode, WrappingMode,
 };
 
 fn is_truecolor_terminal() -> bool {
@@ -119,25 +120,34 @@ impl App {
             _ => unreachable!("other values for --paging are not allowed"),
         };
 
-        let syntax_mapping = SyntaxMapping::builtin();
+        let mut syntax_mapping_builder = SyntaxMappingBuilder::new();
+        syntax_mapping_builder.with_builtin();
 
-        // if let Some(values) = self.matches.get_many::<String>("ignored-suffix") {
-        //     for suffix in values {
-        //         syntax_mapping.insert_ignored_suffix(suffix);
-        //     }
-        // }
+        if let Some(values) = self.matches.get_many::<String>("ignored-suffix") {
+            for suffix in values {
+                syntax_mapping_builder.ignored_suffix(
+                    if !suffix.contains(|ch: char| !ch.is_ascii_alphanumeric()) {
+                        format!(".{}", suffix)
+                    } else {
+                        suffix.to_owned()
+                    },
+                );
+            }
+        }
 
-        // if let Some(values) = self.matches.get_many::<String>("map-syntax") {
-        //     for from_to in values {
-        //         let parts: Vec<_> = from_to.split(':').collect();
+        if let Some(values) = self.matches.get_many::<String>("map-syntax") {
+            for from_to in values {
+                let parts: Vec<_> = from_to.split(':').collect();
 
-        //         if parts.len() != 2 {
-        //             return Err("Invalid syntax mapping. The format of the -m/--map-syntax option is '<glob-pattern>:<syntax-name>'. For example: '*.cpp:C++'.".into());
-        //         }
+                if parts.len() != 2 {
+                    return Err(Error::msg("Invalid syntax mapping. The format of the -m/--map-syntax option is '<glob-pattern>:<syntax-name>'. For example: '*.cpp:C++'."));
+                }
 
-        //         syntax_mapping.insert(parts[0], MappingTarget::MapTo(parts[1]))?;
-        //     }
-        // }
+                syntax_mapping_builder.map_syntax(parts[0], MappingTarget::MapTo(parts[1]))?;
+            }
+        }
+
+        let syntax_mapping = syntax_mapping_builder.build()?;
 
         let maybe_term_width = self
             .matches

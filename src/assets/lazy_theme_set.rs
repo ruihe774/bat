@@ -50,7 +50,8 @@ impl LazyThemeSet {
 impl LazyTheme {
     fn deserialize(&self) -> Result<&Theme> {
         self.deserialized
-            .get_or_try_init(|| asset_from_bytes(self.serialized.take(), "lazy-loaded theme"))
+            .get_or_try_init(|| asset_from_bytes(self.serialized.take()))
+            .map_err(|e| e.context("failed to load theme"))
     }
 }
 

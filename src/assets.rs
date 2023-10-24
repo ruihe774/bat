@@ -1,29 +1,28 @@
 use std::env;
+use std::error::Error as StdError;
 use std::ffi::OsStr;
-use std::fmt::{Display, Write};
+use std::fmt::{self, Display, Write};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
 use flate2::bufread::GzDecoder;
-
 use serde::de::DeserializeOwned;
 use syntect::highlighting::Theme;
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
-use crate::error::*;
+use crate::error::Result;
 #[cfg(feature = "guesslang")]
 use crate::guesslang::GuessLang;
 use crate::input::{InputReader, OpenedInput};
 use crate::syntax_mapping::MappingTarget;
 #[cfg(feature = "zero-copy")]
 use crate::zero_copy::{create_file_mapped_leaky_slice, create_leaky_slice, LeakySliceReader};
-use crate::{bat_warning, SyntaxMapping};
-
-use lazy_theme_set::LazyThemeSet;
+use crate::SyntaxMapping;
 
 #[cfg(feature = "build-assets")]
-pub use crate::assets::build_assets::*;
+pub use build_assets::build;
+use lazy_theme_set::LazyThemeSet;
 
 #[cfg(feature = "build-assets")]
 mod build_assets;
@@ -32,38 +31,72 @@ mod lazy_theme_set;
 #[cfg(feature = "guesslang")]
 macro_rules! include_asset_bytes {
     ($asset_path:literal, $cache_dir:expr) => {
-        load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir)
+        load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir).map_err(|e| {
+            e.context(format!(
+                "failed to load asset '{}'",
+                Path::new($asset_path)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+            ))
+        })
     };
 }
 
 macro_rules! include_asset {
     ($asset_path:literal, $cache_dir:expr) => {
         load_asset_bytes($asset_path, include_bytes!($asset_path), $cache_dir)
-            .and_then(|bytes| asset_from_bytes(bytes, $asset_path))
+            .and_then(|bytes| asset_from_bytes(bytes))
+            .map_err(|e| {
+                e.context(format!(
+                    "failed to load asset '{}'",
+                    Path::new($asset_path)
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                ))
+            })
     };
 }
 
 #[derive(Debug)]
-pub struct UnknownSyntax(String);
+pub struct UnknownSyntax {
+    pub name: String,
+}
 
 impl Display for UnknownSyntax {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "unknown syntax '{}'", self.0)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown syntax '{}'", self.name)
     }
 }
 
-impl std::error::Error for UnknownSyntax {}
+impl StdError for UnknownSyntax {}
 
 #[derive(Debug)]
-pub struct SyntaxUndetected(PathBuf);
+pub struct SyntaxUndetected {
+    pub path: PathBuf,
+}
 
 impl Display for SyntaxUndetected {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "unable to detect syntax for '{}'", self.0.display())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unable to detect syntax for '{}'", self.path.display())
     }
 }
 
-impl std::error::Error for SyntaxUndetected {}
+impl StdError for SyntaxUndetected {}
+
+#[derive(Debug)]
+pub struct UnknownTheme {
+    pub name: String,
+}
+
+impl Display for UnknownTheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown theme '{}'", self.name)
+    }
+}
+
+impl StdError for UnknownTheme {}
 
 #[derive(Debug)]
 pub struct HighlightingAssets {
@@ -73,10 +106,10 @@ pub struct HighlightingAssets {
     guesslang: GuessLang,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct SyntaxReferenceInSet<'a> {
     pub syntax: &'a SyntaxReference,
-    pub syntax_set: &'a SyntaxSet,
+    pub(crate) syntax_set: &'a SyntaxSet,
 }
 
 impl HighlightingAssets {
@@ -126,51 +159,35 @@ impl HighlightingAssets {
     ///
     /// See <https://github.com/sharkdp/bat/issues/1746> and
     /// <https://github.com/sharkdp/bat/issues/1928> for more context.
-    pub fn default_theme() -> &'static str {
+    pub fn get_default_theme(&self) -> &Theme {
+        let default_dark_theme = "Monokai Extended";
+        let default_light_theme = "Monokai Extended Light";
         #[cfg(not(target_os = "macos"))]
-        {
-            Self::default_dark_theme()
-        }
+        let name = default_dark_theme;
         #[cfg(target_os = "macos")]
-        {
-            if macos_dark_mode_active() {
-                Self::default_dark_theme()
-            } else {
-                Self::default_light_theme()
-            }
-        }
+        let name = if macos_dark_mode_active() {
+            default_dark_theme
+        } else {
+            default_light_theme
+        };
+        self.get_theme(name).expect("no default theme")
     }
 
-    /**
-     * The default theme that looks good on a dark background.
-     */
-    fn default_dark_theme() -> &'static str {
-        "Monokai Extended"
+    /// The fallback syntax
+    pub fn get_fallback_syntax(&self) -> SyntaxReferenceInSet {
+        self.find_syntax_by_name("Plain Text")
+            .expect("no fallback syntax")
     }
 
-    /**
-     * The default theme that looks good on a light background.
-     */
-    #[cfg(target_os = "macos")]
-    fn default_light_theme() -> &'static str {
-        "Monokai Extended Light"
-    }
-
-    /// Return the collection of syntect syntax definitions.
-    pub fn get_syntax_set(&self) -> &SyntaxSet {
-        &self.syntax_set
-    }
-
-    pub fn get_syntaxes(&self) -> &[SyntaxReference] {
-        self.get_syntax_set().syntaxes()
-    }
-
-    fn get_theme_set(&self) -> &LazyThemeSet {
-        &self.theme_set
+    pub fn syntaxes(&self) -> impl Iterator<Item = &str> {
+        self.syntax_set
+            .syntaxes()
+            .iter()
+            .map(|syntax| syntax.name.as_str())
     }
 
     pub fn themes(&self) -> impl Iterator<Item = &str> {
-        self.get_theme_set().themes()
+        self.theme_set.themes()
     }
 
     /// Detect the syntax based on, in order:
@@ -187,29 +204,40 @@ impl HighlightingAssets {
     /// detecting syntax based on file name extension, only the file name
     /// extension itself matters.
     ///
-    /// Returns [Error::UndetectedSyntax] if it was not possible detect syntax
+    /// Returns [SyntaxUndetected] if it was not possible detect syntax
     /// based on path/file name/extension (or if the path was mapped to
     /// [MappingTarget::MapToUnknown] or [MappingTarget::MapExtensionToUnknown]).
     /// In this case it is appropriate to fall back to other methods to detect
     /// syntax. Such as using the contents of the first line of the file.
     ///
-    /// Returns [Error::UnknownSyntax] if a syntax mapping exist, but the mapped
+    /// Returns [UnknownSyntax] if a syntax mapping exist, but the mapped
     /// syntax does not exist.
     pub fn get_syntax_for_path(
         &self,
         path: impl AsRef<Path>,
         mapping: &SyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
-        let orignal_path = path.as_ref();
+        let path = path.as_ref();
+        let undetected = || {
+            SyntaxUndetected {
+                path: path.to_owned(),
+            }
+            .into()
+        };
         let path: PathBuf = mapping
-            .strip_ignored_suffixes(absolute_path(path.as_ref())?.into())
+            .strip_ignored_suffixes(absolute_path(path)?.into())
             .into();
         let syntax_match = mapping.get_syntax_for(&path);
         match syntax_match {
-            Some(MappingTarget::MapToUnknown) => Err(SyntaxUndetected(path).into()),
-            Some(MappingTarget::MapTo(syntax_name)) => self
-                .find_syntax_by_name(syntax_name)
-                .ok_or_else(|| UnknownSyntax(syntax_name.to_owned()).into()),
+            Some(MappingTarget::MapToUnknown) => Err(undetected()),
+            Some(MappingTarget::MapTo(syntax_name)) => {
+                self.find_syntax_by_name(syntax_name).ok_or_else(|| {
+                    UnknownSyntax {
+                        name: syntax_name.to_owned(),
+                    }
+                    .into()
+                })
+            }
             _ => {
                 if let Some(sr) = path
                     .file_name()
@@ -217,33 +245,23 @@ impl HighlightingAssets {
                 {
                     Ok(sr)
                 } else if let Some(MappingTarget::MapExtensionToUnknown) = syntax_match {
-                    Err(SyntaxUndetected(path).into())
+                    Err(undetected())
                 } else {
                     path.extension()
                         .and_then(|name| self.find_syntax_by_extension(name))
-                        .ok_or(SyntaxUndetected(path).into())
+                        .ok_or(undetected())
                 }
             }
         }
     }
 
-    /// Look up a syntect theme by name.
-    pub fn get_theme(&self, theme: &str) -> &Theme {
-        match self.get_theme_set().get(theme) {
-            Some(theme) => theme,
-            None => {
-                if theme == "ansi-light" || theme == "ansi-dark" {
-                    bat_warning!("Theme '{}' is deprecated, using 'ansi' instead.", theme);
-                    return self.get_theme("ansi");
-                }
-                if !theme.is_empty() {
-                    bat_warning!("Unknown theme '{}', using default.", theme)
-                }
-                self.get_theme_set()
-                    .get(Self::default_theme())
-                    .expect("something is very wrong if the default theme is missing")
+    pub(crate) fn get_theme(&self, theme: &str) -> Result<&Theme> {
+        self.theme_set.get(theme).ok_or_else(|| {
+            UnknownTheme {
+                name: theme.to_owned(),
             }
-        }
+            .into()
+        })
     }
 
     pub(crate) fn get_syntax(
@@ -253,61 +271,90 @@ impl HighlightingAssets {
         mapping: &SyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
         if let Some(language) = language {
-            let syntax_set = self.get_syntax_set();
-            return syntax_set
+            return self
+                .syntax_set
                 .find_syntax_by_token(language)
-                .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set })
-                .ok_or_else(|| UnknownSyntax(language.to_owned()).into());
+                .map(|syntax| SyntaxReferenceInSet {
+                    syntax,
+                    syntax_set: &self.syntax_set,
+                })
+                .ok_or_else(|| {
+                    UnknownSyntax {
+                        name: language.to_owned(),
+                    }
+                    .into()
+                });
         }
 
         let path = input.path();
-        let mut path_syntax = if let Some(path) = path {
+        let path_syntax = if let Some(path) = path {
             self.get_syntax_for_path(path, mapping)
         } else {
-            Err(SyntaxUndetected("[unknown]".into()).into())
+            Err(SyntaxUndetected {
+                path: "UNKNOWN".into(),
+            }
+            .into())
+            .into()
         };
 
-        if let Err(e) = &mut path_syntax {
-            if let Some(SyntaxUndetected(path)) = e.downcast_mut() {
-                if let Some(sr) = self.get_first_line_syntax(&mut input.reader)? {
-                    return Ok(sr);
-                }
-                #[cfg(feature = "guesslang")]
-                if let Some(sr) = self.get_syntax_by_guesslang(&mut input.reader)? {
-                    return Ok(sr);
-                }
-                return Err(SyntaxUndetected(std::mem::take(path)).into());
+        if path_syntax
+            .as_ref()
+            .err()
+            .and_then(|err| err.downcast_ref::<SyntaxUndetected>())
+            .is_some()
+        {
+            if let Some(sr) = self.get_first_line_syntax(&mut input.reader)? {
+                return Ok(sr);
+            }
+            #[cfg(feature = "guesslang")]
+            if let Some(sr) = self.get_syntax_by_guesslang(&mut input.reader)? {
+                return Ok(sr);
             }
         }
 
         path_syntax
     }
 
-    pub(crate) fn find_syntax_by_name(&self, syntax_name: &str) -> Option<SyntaxReferenceInSet> {
-        let syntax_set = self.get_syntax_set();
-        syntax_set
+    pub fn get_syntax_by_name(&self, name: &str) -> Result<SyntaxReferenceInSet> {
+        self.find_syntax_by_name(name).ok_or_else(|| {
+            UnknownSyntax {
+                name: name.to_owned(),
+            }
+            .into()
+        })
+    }
+
+    fn find_syntax_by_name(&self, syntax_name: &str) -> Option<SyntaxReferenceInSet> {
+        self.syntax_set
             .find_syntax_by_name(syntax_name)
-            .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set })
+            .map(|syntax| SyntaxReferenceInSet {
+                syntax,
+                syntax_set: &self.syntax_set,
+            })
     }
 
     fn find_syntax_by_extension(&self, e: &OsStr) -> Option<SyntaxReferenceInSet> {
-        let syntax_set = self.get_syntax_set();
-        syntax_set
+        self.syntax_set
             .find_syntax_by_extension(e.to_str()?)
-            .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set })
+            .map(|syntax| SyntaxReferenceInSet {
+                syntax,
+                syntax_set: &self.syntax_set,
+            })
     }
 
     fn get_first_line_syntax(
         &self,
         reader: &mut InputReader,
     ) -> Result<Option<SyntaxReferenceInSet>> {
-        let syntax_set = self.get_syntax_set();
         Ok(reader
             .first_read
             .as_ref()
             .map(|s| s.split_inclusive('\n').next().unwrap_or(s))
-            .and_then(|l| syntax_set.find_syntax_by_first_line(l))
-            .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
+            .and_then(|l| self.syntax_set.find_syntax_by_first_line(l))
+            .map(|syntax| SyntaxReferenceInSet {
+                syntax,
+                syntax_set: &self.syntax_set,
+            }))
     }
 
     #[cfg(feature = "guesslang")]
@@ -315,13 +362,15 @@ impl HighlightingAssets {
         &self,
         reader: &mut InputReader,
     ) -> Result<Option<SyntaxReferenceInSet>> {
-        let syntax_set = self.get_syntax_set();
         Ok(reader
             .first_read
             .as_ref()
             .and_then(|s| self.guesslang.guess(s.clone()))
-            .and_then(|l| syntax_set.find_syntax_by_token(l))
-            .map(|syntax| SyntaxReferenceInSet { syntax, syntax_set }))
+            .and_then(|l| self.syntax_set.find_syntax_by_token(l))
+            .map(|syntax| SyntaxReferenceInSet {
+                syntax,
+                syntax_set: &self.syntax_set,
+            }))
     }
 }
 
@@ -411,7 +460,7 @@ fn load_asset_bytes(
     )
 }
 
-fn asset_from_bytes<T: DeserializeOwned>(bytes: Vec<u8>, description: impl Display) -> Result<T> {
+fn asset_from_bytes<T: DeserializeOwned>(bytes: Vec<u8>) -> Result<T> {
     #[cfg(feature = "zero-copy")]
     return Ok(bincode::deserialize_from_custom(
         LeakySliceReader::from_leaky_vec(bytes),

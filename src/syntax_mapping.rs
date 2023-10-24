@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::Path};
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, Anchored, Input, MatchKind, StartKind};
 use globset::{Candidate, Glob, GlobSet, GlobSetBuilder};

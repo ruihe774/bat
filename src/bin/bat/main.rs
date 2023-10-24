@@ -67,8 +67,9 @@ pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
 
     let assets = HighlightingAssets::new(cache_dir)?;
     let mut languages = assets
-        .get_syntaxes()
-        .iter()
+        .syntaxes()
+        .map(|name| assets.get_syntax_by_name(name).unwrap())
+        .map(|syntax_ref| syntax_ref.syntax)
         .filter(|syntax| !syntax.hidden && !syntax.file_extensions.is_empty())
         .cloned()
         .collect::<Vec<_>>();
@@ -176,7 +177,7 @@ pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<
                 "Theme: {}\n",
                 Style::new().bold().paint(theme.to_string())
             )?;
-            config.theme = theme.to_string();
+            config.theme = Some(theme.to_string());
             Controller::new(&config, &assets)
                 .run(vec![theme_preview_file()], None)
                 .ok();

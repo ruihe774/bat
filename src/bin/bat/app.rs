@@ -14,7 +14,6 @@ use console::Term;
 
 use crate::input::{new_file_input, new_stdin_input};
 use bat::{
-    assets::HighlightingAssets,
     bat_warning,
     config::{Config, VisibleLines},
     error::*,
@@ -238,15 +237,14 @@ impl App {
             theme: self
                 .matches
                 .get_one::<String>("theme")
-                .map(String::from)
                 .map(|s| {
                     if s == "default" {
-                        String::from(HighlightingAssets::default_theme())
+                        None
                     } else {
-                        s
+                        Some(s.clone())
                     }
                 })
-                .unwrap_or_else(|| String::from(HighlightingAssets::default_theme())),
+                .unwrap_or(None),
             visible_lines: match self.matches.try_contains_id("diff").unwrap_or_default()
                 && self.matches.get_flag("diff")
             {

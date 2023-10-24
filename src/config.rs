@@ -73,7 +73,7 @@ pub struct Config<'a> {
     pub visible_lines: VisibleLines,
 
     /// The syntax highlighting theme
-    pub theme: String,
+    pub theme: Option<String>,
 
     /// File extension/name mappings
     pub syntax_mapping: SyntaxMapping<'a>,

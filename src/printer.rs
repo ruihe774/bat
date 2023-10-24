@@ -154,7 +154,10 @@ impl<'a> InteractivePrinter<'a> {
         input: &mut OpenedInput,
         #[cfg(feature = "git")] line_changes: &'a Option<LineChanges>,
     ) -> Result<Self> {
-        let theme = assets.get_theme(&config.theme);
+        let theme = config.theme.as_ref().map_or_else(
+            || Ok(assets.get_default_theme()),
+            |name| assets.get_theme(name),
+        )?;
 
         let background_color_highlight = theme.settings.line_highlight;
 
@@ -209,15 +212,10 @@ impl<'a> InteractivePrinter<'a> {
             let syntax_in_set =
                 match assets.get_syntax(config.language, input, &config.syntax_mapping) {
                     Ok(syntax_in_set) => syntax_in_set,
-                    Err(e) => {
-                        if e.downcast_ref::<SyntaxUndetected>().is_some() {
-                            assets
-                                .find_syntax_by_name("Plain Text")
-                                .expect("no syntax for plain text")
-                        } else {
-                            return Err(e);
-                        }
+                    Err(e) if e.downcast_ref::<SyntaxUndetected>().is_some() => {
+                        assets.get_fallback_syntax()
                     }
+                    Err(e) => return Err(e),
                 };
 
             Some(HighlighterFromSet::new(syntax_in_set, theme))
@@ -507,7 +505,14 @@ impl<'a> Printer for InteractivePrinter<'a> {
         let highlight_this_line =
             self.config.highlighted_lines.0.check(line_number) == RangeCheckResult::InRange;
 
-        if highlight_this_line && self.config.theme == "ansi" {
+        if highlight_this_line
+            && self
+                .config
+                .theme
+                .as_ref()
+                .map(|name| name == "ansi")
+                .unwrap_or(false)
+        {
             self.ansi_style.update("^[4m");
         }
 
@@ -697,7 +702,14 @@ impl<'a> Printer for InteractivePrinter<'a> {
             writeln!(handle)?;
         }
 
-        if highlight_this_line && self.config.theme == "ansi" {
+        if highlight_this_line
+            && self
+                .config
+                .theme
+                .as_ref()
+                .map(|name| name == "ansi")
+                .unwrap_or(false)
+        {
             self.ansi_style.update("^[24m");
             write!(handle, "\x1B[24m")?;
         }

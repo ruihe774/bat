@@ -253,33 +253,10 @@ impl<'a> PrettyPrinter<'a> {
         self
     }
 
-    /// Specify the highlighting theme
-    pub fn theme(&mut self, theme: impl AsRef<str>) -> &mut Self {
-        self.config.theme = theme.as_ref().to_owned();
-        self
-    }
-
     /// Specify custom file extension / file name to syntax mappings
     pub fn syntax_mapping(&mut self, mapping: SyntaxMapping<'a>) -> &mut Self {
         self.config.syntax_mapping = mapping;
         self
-    }
-
-    pub fn themes(&self) -> impl Iterator<Item = &str> {
-        self.assets.themes()
-    }
-
-    pub fn syntaxes(&self) -> impl Iterator<Item = Syntax> + '_ {
-        // We always use assets from the binary, which are guaranteed to always
-        // be valid, so get_syntaxes() can never fail here
-        self.assets
-            .get_syntaxes()
-            .iter()
-            .filter(|s| !s.hidden)
-            .map(|s| Syntax {
-                name: s.name.clone(),
-                file_extensions: s.file_extensions.clone(),
-            })
     }
 
     /// Pretty-print all specified inputs. This method will "use" all stored inputs.

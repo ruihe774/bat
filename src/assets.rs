@@ -2,11 +2,13 @@ use std::env;
 use std::error::Error as StdError;
 use std::ffi::OsStr;
 use std::fmt::{self, Display, Write};
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
 use flate2::bufread::GzDecoder;
+#[cfg(feature = "zero-copy")]
+use memmap2::MmapOptions;
 use serde::de::DeserializeOwned;
 use syntect::highlighting::Theme;
 use syntect::parsing::{SyntaxReference, SyntaxSet};
@@ -17,7 +19,7 @@ use crate::guesslang::GuessLang;
 use crate::input::{InputReader, OpenedInput};
 use crate::syntax_mapping::MappingTarget;
 #[cfg(feature = "zero-copy")]
-use crate::zero_copy::{create_file_mapped_leaky_slice, create_leaky_slice, LeakySliceReader};
+use crate::zero_copy::{leak_mmap, LeakySliceReader};
 use crate::SyntaxMapping;
 
 #[cfg(feature = "build-assets")]
@@ -429,7 +431,8 @@ fn load_asset_bytes(
         if let Some(buffer) = cache_file.as_ref().and_then(|cache_file| {
             #[cfg(feature = "zero-copy")]
             return File::open(cache_file)
-                .and_then(|f| unsafe { create_file_mapped_leaky_slice(&f) })
+                .and_then(|f| unsafe { MmapOptions::new().len(length).populate().map_copy(&f) })
+                .map(leak_mmap)
                 .map(|slice| unsafe {
                     Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), slice.len())
                 })
@@ -441,25 +444,36 @@ fn load_asset_bytes(
         } else {
             let mut decoder = GzDecoder::new(data);
             #[cfg(feature = "zero-copy")]
-            let buffer = {
-                let mut buffer = unsafe {
-                    let slice = create_leaky_slice(length)?;
-                    Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), slice.len())
-                };
+            return Ok({
+                let mmap = cache_file.as_ref().map_or_else(
+                    || MmapOptions::new().len(length).populate().map_anon(),
+                    |cache_file| {
+                        fs::create_dir_all(cache_file.parent().unwrap())?;
+                        let f = OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .create(true)
+                            .open(cache_file)?;
+                        f.set_len(length.try_into().unwrap())?;
+                        unsafe { MmapOptions::new().len(length).populate().map_mut(&f) }
+                    },
+                )?;
+                let slice = leak_mmap(mmap);
+                let mut buffer =
+                    unsafe { Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), slice.len()) };
                 decoder.read_exact(buffer.as_mut_slice())?;
                 buffer
-            };
+            });
             #[cfg(not(feature = "zero-copy"))]
-            let buffer = {
+            return Ok({
                 let mut buffer = Vec::with_capacity(length);
                 decoder.read_to_end(&mut buffer)?;
+                if let Some(cache_file) = cache_file {
+                    fs::create_dir_all(cache_file.parent().unwrap())?;
+                    fs::write(cache_file, &buffer)?;
+                }
                 buffer
-            };
-            if let Some(cache_file) = cache_file {
-                fs::create_dir_all(cache_file.parent().unwrap())?;
-                fs::write(cache_file, &buffer)?;
-            }
-            buffer
+            });
         },
     )
 }

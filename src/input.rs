@@ -9,10 +9,12 @@ use std::process::{Command, Stdio};
 
 use bstr::{ByteSlice, ByteVec};
 use clircle::{Clircle, Identifier};
+#[cfg(feature = "zero-copy")]
+use memmap2::MmapOptions;
 
 use crate::error::*;
 #[cfg(feature = "zero-copy")]
-use crate::zero_copy::{create_file_mapped_leaky_slice, LeakySliceReader};
+use crate::zero_copy::{leak_mmap, LeakySliceReader};
 
 #[derive(Debug)]
 pub struct IoCircle(PathBuf);
@@ -157,9 +159,9 @@ impl Input {
                     }
 
                     #[cfg(feature = "zero-copy")]
-                    let r = unsafe { create_file_mapped_leaky_slice(&file) }.map_or_else(
+                    let r = unsafe { MmapOptions::new().map_copy(&file) }.map_or_else(
                         |_| InputReader::new(BufReader::new(file)),
-                        |slice| InputReader::new(LeakySliceReader::new(slice)),
+                        |mmap| InputReader::new(LeakySliceReader::new(leak_mmap(mmap))),
                     );
                     #[cfg(not(feature = "zero-copy"))]
                     let r = InputReader::new(BufReader::new(file));

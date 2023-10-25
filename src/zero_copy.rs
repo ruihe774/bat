@@ -1,6 +1,5 @@
 use std::alloc::{GlobalAlloc, Layout};
 use std::ffi::c_void;
-use std::fs::File;
 use std::io::{self, BufRead, Read};
 use std::mem::forget;
 
@@ -8,7 +7,7 @@ use bincode::BincodeRead;
 use libmimalloc_sys::{
     mi_free, mi_is_in_heap_region, mi_malloc_aligned, mi_realloc_aligned, mi_zalloc_aligned,
 };
-use memmap2::MmapOptions;
+use memmap2::MmapMut;
 
 struct TolerentAllocator;
 
@@ -45,21 +44,12 @@ unsafe impl GlobalAlloc for TolerentAllocator {
 #[global_allocator]
 static GLOBAL: TolerentAllocator = TolerentAllocator;
 
-pub(crate) unsafe fn create_file_mapped_leaky_slice(file: &File) -> io::Result<&'static mut [u8]> {
-    let mut mmap = MmapOptions::new().map_copy(file)?;
+pub(crate) fn leak_mmap(mut mmap: MmapMut) -> &'static mut [u8] {
     let ptr = mmap.as_mut_ptr();
     let len = mmap.len();
-    let slice = std::slice::from_raw_parts_mut(ptr, len);
+    let slice = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
     forget(mmap);
-    Ok(slice)
-}
-
-pub(crate) unsafe fn create_leaky_slice(len: usize) -> io::Result<&'static mut [u8]> {
-    let mut mmap = MmapOptions::new().len(len).map_anon()?;
-    let ptr = mmap.as_mut_ptr();
-    let slice = std::slice::from_raw_parts_mut(ptr, len);
-    forget(mmap);
-    Ok(slice)
+    slice
 }
 
 pub(crate) struct LeakySliceReader {

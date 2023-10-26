@@ -77,7 +77,7 @@ pub fn get_pager_executable(config_pager: Option<&str>) -> Option<String> {
 
 #[test]
 fn default_config_should_include_all_lines() {
-    use crate::line_range::RangeCheckResult;
+    use crate::line_range::{RangeCheckResult, LineRanges};
 
     assert_eq!(LineRanges::default().check(17), RangeCheckResult::InRange);
 }

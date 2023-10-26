@@ -120,11 +120,11 @@ impl App {
         };
 
         let mut syntax_mapping_builder = SyntaxMappingBuilder::new();
-        syntax_mapping_builder.with_builtin();
+        syntax_mapping_builder = syntax_mapping_builder.with_builtin();
 
         if let Some(values) = self.matches.get_many::<String>("ignored-suffix") {
             for suffix in values {
-                syntax_mapping_builder.ignored_suffix(
+                syntax_mapping_builder = syntax_mapping_builder.ignored_suffix(
                     if !suffix.contains(|ch: char| !ch.is_ascii_alphanumeric()) {
                         format!(".{}", suffix)
                     } else {
@@ -142,7 +142,7 @@ impl App {
                     return Err(Error::msg("Invalid syntax mapping. The format of the -m/--map-syntax option is '<glob-pattern>:<syntax-name>'. For example: '*.cpp:C++'."));
                 }
 
-                syntax_mapping_builder.map_syntax(parts[0], MappingTarget::MapTo(parts[1]))?;
+                syntax_mapping_builder = syntax_mapping_builder.map_syntax(parts[0], MappingTarget::MapTo(parts[1]))?;
             }
         }
 

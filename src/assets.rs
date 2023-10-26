@@ -526,6 +526,7 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
+    use crate::SyntaxMappingBuilder;
     use crate::input::Input;
 
     struct SyntaxDetectionTest {
@@ -535,10 +536,10 @@ mod tests {
     }
 
     impl SyntaxDetectionTest {
-        fn new() -> Self {
+        fn new(syntax_mapping: Option<SyntaxMapping<'static>>) -> Self {
             SyntaxDetectionTest {
                 assets: HighlightingAssets::with_no_cache(),
-                syntax_mapping: SyntaxMapping::builtin(),
+                syntax_mapping: syntax_mapping.unwrap_or_else(||SyntaxMappingBuilder::new().with_builtin().build().unwrap()),
                 temp_dir: TempDir::new().expect("creation of temporary directory"),
             }
         }
@@ -622,7 +623,7 @@ mod tests {
 
     #[test]
     fn syntax_detection_basic() {
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
 
         assert_eq!(test.syntax_for_file("test.rs"), "Rust");
         assert_eq!(test.syntax_for_file("test.cpp"), "C++");
@@ -640,7 +641,7 @@ mod tests {
     fn syntax_detection_invalid_utf8() {
         use std::os::unix::ffi::OsStrExt;
 
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
 
         assert_eq!(
             test.syntax_for_file_os(OsStr::from_bytes(b"invalid_\xFEutf8_filename.rs")),
@@ -650,28 +651,21 @@ mod tests {
 
     #[test]
     fn syntax_detection_same_for_inputkinds() {
-        let test = SyntaxDetectionTest::new();
-
-        // test.syntax_mapping
-        //     .insert("*.myext", MappingTarget::MapTo("C"))
-        //     .ok();
-        // test.syntax_mapping
-        //     .insert("MY_FILE", MappingTarget::MapTo("Markdown"))
-        //     .ok();
+        let test = SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.myext", MappingTarget::MapTo("C")).unwrap().map_syntax("MY_FILE", MappingTarget::MapTo("Markdown")).unwrap().build().unwrap()));
 
         assert!(test.syntax_is_same_for_inputkinds("Test.md", ""));
         assert!(test.syntax_is_same_for_inputkinds("Test.txt", "#!/bin/bash"));
         assert!(test.syntax_is_same_for_inputkinds(".bashrc", ""));
         assert!(test.syntax_is_same_for_inputkinds("test.h", ""));
         assert!(test.syntax_is_same_for_inputkinds("test.js", "#!/bin/bash"));
-        // assert!(test.syntax_is_same_for_inputkinds("test.myext", ""));
-        // assert!(test.syntax_is_same_for_inputkinds("MY_FILE", ""));
-        // assert!(test.syntax_is_same_for_inputkinds("MY_FILE", "<?php"));
+        assert!(test.syntax_is_same_for_inputkinds("test.myext", ""));
+        assert!(test.syntax_is_same_for_inputkinds("MY_FILE", ""));
+        assert!(test.syntax_is_same_for_inputkinds("MY_FILE", "<?php"));
     }
 
     #[test]
     fn syntax_detection_well_defined_mapping_for_duplicate_extensions() {
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
 
         assert_eq!(test.syntax_for_file("test.h"), "C++");
         assert_eq!(test.syntax_for_file("test.sass"), "Sass");
@@ -682,7 +676,7 @@ mod tests {
 
     #[test]
     fn syntax_detection_first_line() {
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
 
         assert_eq!(
             test.syntax_for_file_with_content("my_script", "#!/bin/bash"),
@@ -698,21 +692,15 @@ mod tests {
         );
     }
 
-    #[ignore]
     #[test]
     fn syntax_detection_with_custom_mapping() {
-        let test = SyntaxDetectionTest::new();
-
-        assert_eq!(test.syntax_for_file("test.h"), "C++");
-        // test.syntax_mapping
-        //     .insert("*.h", MappingTarget::MapTo("C"))
-        //     .ok();
-        assert_eq!(test.syntax_for_file("test.h"), "C");
+        assert_eq!(SyntaxDetectionTest::new(None).syntax_for_file("test.h"), "C++");
+        assert_eq!(SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.h", MappingTarget::MapTo("C")).unwrap().build().unwrap())).syntax_for_file("test.h"), "C");
     }
 
     #[test]
     fn syntax_detection_with_extension_mapping_to_unknown() {
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
 
         // Normally, a CMakeLists.txt file shall use the CMake syntax, even if it is
         // a bash script in disguise
@@ -727,28 +715,27 @@ mod tests {
             "Plain Text"
         );
 
-        // // If we setup MapExtensionToUnknown on *.txt, the match on the full
-        // // file name of "CMakeLists.txt" shall have higher prio, and CMake shall
-        // // still be used for it
-        // test.syntax_mapping
-        //     .insert("*.txt", MappingTarget::MapExtensionToUnknown)
-        //     .ok();
-        // assert_eq!(
-        //     test.syntax_for_file_with_content("CMakeLists.txt", "#!/bin/bash"),
-        //     "CMake"
-        // );
+        let test = SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.txt", MappingTarget::MapExtensionToUnknown).unwrap().build().unwrap()));
 
-        // // However, for *other* files with a .txt extension, first-line fallback
-        // // shall now be used
-        // assert_eq!(
-        //     test.syntax_for_file_with_content("some-other.txt", "#!/bin/bash"),
-        //     "Bourne Again Shell (bash)"
-        // );
+        // If we setup MapExtensionToUnknown on *.txt, the match on the full
+        // file name of "CMakeLists.txt" shall have higher prio, and CMake shall
+        // still be used for it
+        assert_eq!(
+            test.syntax_for_file_with_content("CMakeLists.txt", "#!/bin/bash"),
+            "CMake"
+        );
+
+        // However, for *other* files with a .txt extension, first-line fallback
+        // shall now be used
+        assert_eq!(
+            test.syntax_for_file_with_content("some-other.txt", "#!/bin/bash"),
+            "Bourne Again Shell (bash)"
+        );
     }
 
     #[test]
     fn syntax_detection_is_case_insensitive() {
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
 
         assert_eq!(test.syntax_for_file("README.md"), "Markdown");
         assert_eq!(test.syntax_for_file("README.mD"), "Markdown");
@@ -756,9 +743,7 @@ mod tests {
         assert_eq!(test.syntax_for_file("README.MD"), "Markdown");
 
         // // Adding a mapping for "MD" in addition to "md" should not break the mapping
-        // test.syntax_mapping
-        //     .insert("*.MD", MappingTarget::MapTo("Markdown"))
-        //     .ok();
+        let test = SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.MD", MappingTarget::MapTo("Markdown")).unwrap().build().unwrap()));
 
         assert_eq!(test.syntax_for_file("README.md"), "Markdown");
         assert_eq!(test.syntax_for_file("README.mD"), "Markdown");
@@ -769,7 +754,7 @@ mod tests {
     #[ignore]
     #[test]
     fn syntax_detection_stdin_filename() {
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
 
         // from file extension
         assert_eq!(test.syntax_for_stdin_with_content("test.cpp", b"a"), "C++");
@@ -785,7 +770,7 @@ mod tests {
     fn syntax_detection_for_symlinked_file() {
         use std::os::unix::fs::symlink;
 
-        let test = SyntaxDetectionTest::new();
+        let test = SyntaxDetectionTest::new(None);
         let file_path = test.temp_dir.path().join("my_ssh_config_filename");
         {
             File::create(&file_path).unwrap();

@@ -114,7 +114,7 @@ impl<'a> SyntaxMappingBuilder<'a> {
         }
     }
 
-    pub fn with_builtin(&mut self) -> &mut Self {
+    pub fn with_builtin(mut self) -> Self {
         use MappingTarget::*;
         self.mapping.extend(
             include!("../assets/syntax_mapping.ron")
@@ -142,7 +142,7 @@ impl<'a> SyntaxMappingBuilder<'a> {
         SyntaxMapping::new(self.mapping, self.ignored_suffixes)
     }
 
-    pub fn map_syntax(&mut self, glob: &'_ str, target: MappingTarget<'a>) -> Result<&mut Self> {
+    pub fn map_syntax(mut self, glob: &'_ str, target: MappingTarget<'a>) -> Result<Self> {
         self.mapping.push((
             GlobBuilder::new(glob)
                 .case_insensitive(true)
@@ -153,7 +153,7 @@ impl<'a> SyntaxMappingBuilder<'a> {
         Ok(self)
     }
 
-    pub fn ignored_suffix(&mut self, suffix: String) -> &mut Self {
+    pub fn ignored_suffix(mut self, suffix: String) -> Self {
         self.ignored_suffixes.push(suffix);
         self
     }

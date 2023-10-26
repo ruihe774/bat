@@ -22,7 +22,7 @@ use crate::decorations::{Decoration, GridBorderDecoration, LineNumberDecoration}
 #[cfg(feature = "git")]
 use crate::diff::LineChanges;
 use crate::error::*;
-use crate::input::{decode, ContentType, OpenedInput};
+use crate::input::{ContentType, OpenedInput};
 use crate::line_range::RangeCheckResult;
 use crate::preprocessor::{expand_tabs, replace_nonprintable};
 
@@ -66,11 +66,15 @@ pub(crate) trait Printer {
 
 pub struct SimplePrinter<'a> {
     config: &'a Config<'a>,
+    content_type: Option<ContentType>,
 }
 
 impl<'a> SimplePrinter<'a> {
-    pub fn new(config: &'a Config) -> Self {
-        SimplePrinter { config }
+    pub(crate) fn new(config: &'a Config, input: &mut OpenedInput) -> Self {
+        SimplePrinter {
+            config,
+            content_type: input.reader.content_type.clone(),
+        }
     }
 }
 
@@ -96,13 +100,15 @@ impl<'a> Printer for SimplePrinter<'a> {
         &mut self,
         out_of_range: bool,
         handle: &mut OutputHandle,
-        _line_number: usize,
+        line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()> {
         if !out_of_range {
-            if self.config.show_nonprintable {
+            if self.config.nonprintable_notation.show_nonprintable() {
                 let line = replace_nonprintable(
                     line_buffer,
+                    self.content_type.as_ref(),
+                    line_number == 1,
                     self.config.tab_width,
                     self.config.nonprintable_notation,
                 );
@@ -200,12 +206,9 @@ impl<'a> InteractivePrinter<'a> {
             panel_width = 0;
         }
 
-        let highlighter_from_set = if input
-            .reader
-            .content_type
-            .as_ref()
-            .map_or(false, |c| c.is_binary() && !config.show_nonprintable)
-        {
+        let highlighter_from_set = if input.reader.content_type.as_ref().map_or(false, |c| {
+            c.is_binary() && !config.nonprintable_notation.show_nonprintable()
+        }) {
             None
         } else {
             // Determine the type of syntax for highlighting
@@ -319,7 +322,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
                 .content_type
                 .as_ref()
                 .map_or(false, |content_type| content_type.is_binary())
-                && !self.config.show_nonprintable
+                && !self.config.nonprintable_notation.show_nonprintable()
             {
                 writeln!(
                     handle,
@@ -397,7 +400,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
 
         if self.config.style_components.grid() {
             if self.content_type.as_ref().map_or(false, |c| c.is_text())
-                || self.config.show_nonprintable
+                || self.config.nonprintable_notation.show_nonprintable()
             {
                 self.print_horizontal_line(handle, '┼')?;
             } else {
@@ -411,7 +414,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
     fn print_footer(&mut self, handle: &mut OutputHandle, _input: &OpenedInput) -> Result<()> {
         if self.config.style_components.grid()
             && (self.content_type.as_ref().map_or(false, |c| c.is_text())
-                || self.config.show_nonprintable)
+                || self.config.nonprintable_notation.show_nonprintable())
         {
             self.print_horizontal_line(handle, '┴')
         } else {
@@ -450,23 +453,13 @@ impl<'a> Printer for InteractivePrinter<'a> {
         line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()> {
-        let line = if self.config.show_nonprintable {
-            replace_nonprintable(
-                line_buffer,
-                self.config.tab_width,
-                self.config.nonprintable_notation,
-            )
-            .into()
-        } else {
-            match self
-                .content_type
-                .as_ref()
-                .and_then(|content_type| decode(line_buffer, content_type, line_number == 1))
-            {
-                Some(line) => line,
-                None => return Ok(()),
-            }
-        };
+        let line = replace_nonprintable(
+            line_buffer,
+            self.content_type.as_ref(),
+            line_number == 1,
+            self.config.tab_width,
+            self.config.nonprintable_notation,
+        );
 
         let regions = {
             let highlighter_from_set = match self.highlighter_from_set {

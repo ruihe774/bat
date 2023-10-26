@@ -1,11 +1,34 @@
+use std::borrow::Cow;
 use std::fmt::Write;
 
 use console::AnsiCodeIterator;
 
-use crate::nonprintable_notation::NonprintableNotation;
+use crate::input::{decode, ContentType};
+
+#[derive(Debug, Copy, Clone, Default)]
+pub enum NonprintableNotation {
+    /// Use caret notation (^G, ^J, ^@, ..)
+    Caret,
+
+    /// Use unicode notation (␇, ␊, ␀, ..)
+    Unicode,
+
+    /// No nonprintable replacement
+    #[default]
+    None,
+}
+
+impl NonprintableNotation {
+    pub(crate) fn show_nonprintable(&self) -> bool {
+        match self {
+            NonprintableNotation::Caret | NonprintableNotation::Unicode => true,
+            NonprintableNotation::None => false,
+        }
+    }
+}
 
 /// Expand tabs like an ANSI-enabled expand(1).
-pub fn expand_tabs(line: &str, width: usize, cursor: &mut usize) -> String {
+pub(crate) fn expand_tabs(line: &str, width: usize, cursor: &mut usize) -> String {
     let mut buffer = String::with_capacity(line.len() * 2);
 
     for chunk in AnsiCodeIterator::new(line) {
@@ -44,11 +67,27 @@ fn try_parse_utf8_char(input: &[u8]) -> Option<(char, usize)> {
     }
 }
 
-pub fn replace_nonprintable(
-    input: &[u8],
+pub(crate) fn replace_nonprintable<'a>(
+    input: &'a [u8],
+    content_type: Option<&ContentType>,
+    is_first_line: bool,
     tab_width: usize,
     nonprintable_notation: NonprintableNotation,
-) -> String {
+) -> Cow<'a, str> {
+    if !nonprintable_notation.show_nonprintable() {
+        return content_type
+            .map(|content_type| {
+                decode(input, content_type, is_first_line).expect("cannot decode binary")
+            })
+            .unwrap_or_else(|| {
+                assert!(
+                    input.is_empty(),
+                    "cannot decode input with unknown content type"
+                );
+                "".into()
+            });
+    }
+
     let mut output = String::new();
 
     let tab_width = if tab_width == 0 { 4 } else { tab_width };
@@ -81,6 +120,7 @@ pub fn replace_nonprintable(
                     output.push_str(match nonprintable_notation {
                         NonprintableNotation::Caret => "^J\x0A",
                         NonprintableNotation::Unicode => "␊\x0A",
+                        NonprintableNotation::None => unreachable!(),
                     });
                     line_idx = 0;
                 }
@@ -98,12 +138,15 @@ pub fn replace_nonprintable(
                             let replacement_symbol = char::from_u32(0x2400 + c).unwrap();
                             output.push(replacement_symbol)
                         }
+
+                        NonprintableNotation::None => unreachable!(),
                     }
                 }
                 // delete
                 '\x7F' => match nonprintable_notation {
                     NonprintableNotation::Caret => output.push_str("^?"),
                     NonprintableNotation::Unicode => output.push('\u{2421}'),
+                    NonprintableNotation::None => unreachable!(),
                 },
                 // printable ASCII
                 c if c.is_ascii_alphanumeric()
@@ -121,7 +164,7 @@ pub fn replace_nonprintable(
         }
     }
 
-    output
+    output.into()
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use crate::line_range::{HighlightedLineRanges, LineRanges};
-use crate::nonprintable_notation::NonprintableNotation;
 #[cfg(feature = "paging")]
 use crate::paging::PagingMode;
+use crate::preprocessor::NonprintableNotation;
 use crate::style::StyleComponents;
 use crate::syntax_mapping::SyntaxMapping;
 use crate::wrapping::WrappingMode;
@@ -36,9 +36,6 @@ impl Default for VisibleLines {
 pub struct Config<'a> {
     /// The explicitly configured language, if any
     pub language: Option<&'a str>,
-
-    /// Whether or not to show/replace non-printable characters like space, tab and newline.
-    pub show_nonprintable: bool,
 
     /// The configured notation for non-printable characters
     pub nonprintable_notation: NonprintableNotation,

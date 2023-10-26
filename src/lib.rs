@@ -24,14 +24,12 @@ mod less;
 #[cfg(feature = "lessopen")]
 mod lessopen;
 pub mod line_range;
-mod nonprintable_notation;
 mod output;
 #[cfg(feature = "paging")]
 mod pager;
 #[cfg(feature = "paging")]
 mod paging;
 mod preprocessor;
-mod pretty_printer;
 mod printer;
 pub mod style;
 mod syntax_mapping;
@@ -42,8 +40,7 @@ mod wrapping;
 mod zero_copy;
 
 pub use input::Input;
-pub use nonprintable_notation::NonprintableNotation;
-pub use pretty_printer::{PrettyPrinter, Syntax};
+pub use preprocessor::NonprintableNotation;
 pub use syntax_mapping::{MappingTarget, SyntaxMapping, SyntaxMappingBuilder};
 pub use wrapping::WrappingMode;
 

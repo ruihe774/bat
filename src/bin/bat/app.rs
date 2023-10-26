@@ -183,14 +183,15 @@ impl App {
                         None
                     }
                 }),
-            show_nonprintable: self.matches.get_flag("show-all"),
-            nonprintable_notation: match self
-                .matches
-                .get_one::<String>("nonprintable-notation")
-                .map(|s| s.as_str())
-            {
-                Some("unicode") => NonprintableNotation::Unicode,
-                Some("caret") => NonprintableNotation::Caret,
+            nonprintable_notation: match (
+                self.matches.get_flag("show-all"),
+                self.matches
+                    .get_one::<String>("nonprintable-notation")
+                    .map(|s| s.as_str()),
+            ) {
+                (true, None) => NonprintableNotation::Unicode,
+                (_, Some("unicode")) => NonprintableNotation::Unicode,
+                (_, Some("caret")) => NonprintableNotation::Caret,
                 _ => unreachable!("other values for --nonprintable-notation are not allowed"),
             },
             wrapping_mode: if self.interactive_output || maybe_term_width.is_some() {

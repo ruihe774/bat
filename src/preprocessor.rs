@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::Write;
 
+use bstr::ByteSlice;
 use console::AnsiCodeIterator;
 
 use crate::input::{decode, ContentType};
@@ -60,14 +61,7 @@ pub(crate) fn expand_tabs(line: &str, width: usize, cursor: &mut usize) -> Strin
     buffer
 }
 
-fn try_parse_utf8_char(input: &[u8]) -> Option<(char, usize)> {
-    match bstr::decode_utf8(input) {
-        (Some(char), size) => Some((char, size)),
-        (None, _) => None,
-    }
-}
-
-pub(crate) fn replace_nonprintable<'a>(
+pub(crate) fn preprocess<'a>(
     input: &'a [u8],
     content_type: Option<&ContentType>,
     is_first_line: bool,
@@ -89,29 +83,22 @@ pub(crate) fn replace_nonprintable<'a>(
     }
 
     let mut output = String::new();
-
     let tab_width = if tab_width == 0 { 4 } else { tab_width };
-
-    let mut idx = 0;
     let mut line_idx = 0;
-    let len = input.len();
-    while idx < len {
-        if let Some((chr, skip_ahead)) = try_parse_utf8_char(&input[idx..]) {
-            idx += skip_ahead;
-            line_idx += 1;
-
+    for chunk in input.utf8_chunks() {
+        for chr in chunk.valid().chars() {
+            let mut before_size = output.len();
             match chr {
                 // space
                 ' ' => output.push('·'),
                 // tab
                 '\t' => {
-                    let tab_stop = tab_width - ((line_idx - 1) % tab_width);
-                    line_idx = 0;
+                    let tab_stop = tab_width - line_idx % tab_width;
                     if tab_stop == 1 {
                         output.push('↹');
                     } else {
                         output.push('├');
-                        output.push_str(&"─".repeat(tab_stop - 2));
+                        output.extend(['─'].into_iter().cycle().take(tab_stop - 2));
                         output.push('┤');
                     }
                 }
@@ -122,7 +109,7 @@ pub(crate) fn replace_nonprintable<'a>(
                         NonprintableNotation::Unicode => "␊\x0A",
                         NonprintableNotation::None => unreachable!(),
                     });
-                    line_idx = 0;
+                    before_size = output.len();
                 }
                 // ASCII control characters
                 '\x00'..='\x1F' => {
@@ -131,7 +118,8 @@ pub(crate) fn replace_nonprintable<'a>(
                     match nonprintable_notation {
                         NonprintableNotation::Caret => {
                             let caret_character = char::from_u32(0x40 + c).unwrap();
-                            write!(output, "^{caret_character}").ok();
+                            output.push('^');
+                            output.push(caret_character);
                         }
 
                         NonprintableNotation::Unicode => {
@@ -156,11 +144,13 @@ pub(crate) fn replace_nonprintable<'a>(
                     output.push(c)
                 }
                 // everything else
-                c => output.push_str(&c.escape_unicode().collect::<String>()),
+                c => output.extend(c.escape_unicode()),
             }
-        } else {
-            write!(output, "\\x{:02X}", input[idx]).ok();
-            idx += 1;
+            line_idx += output.len() - before_size;
+        }
+        for byte in chunk.invalid() {
+            write!(output, "\\x{:02X}", byte).unwrap();
+            line_idx += 6;
         }
     }
 

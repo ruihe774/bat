@@ -24,7 +24,7 @@ use crate::diff::LineChanges;
 use crate::error::*;
 use crate::input::{ContentType, OpenedInput};
 use crate::line_range::RangeCheckResult;
-use crate::preprocessor::{expand_tabs, replace_nonprintable};
+use crate::preprocessor::{expand_tabs, preprocess};
 
 use crate::terminal::{as_terminal_escaped, to_ansi_color};
 use crate::vscreen::AnsiStyle;
@@ -105,7 +105,7 @@ impl<'a> Printer for SimplePrinter<'a> {
     ) -> Result<()> {
         if !out_of_range {
             if self.config.nonprintable_notation.show_nonprintable() {
-                let line = replace_nonprintable(
+                let line = preprocess(
                     line_buffer,
                     self.content_type.as_ref(),
                     line_number == 1,
@@ -453,7 +453,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
         line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()> {
-        let line = replace_nonprintable(
+        let line = preprocess(
             line_buffer,
             self.content_type.as_ref(),
             line_number == 1,

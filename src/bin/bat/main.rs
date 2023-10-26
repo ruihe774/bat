@@ -6,7 +6,6 @@ mod config;
 mod directories;
 mod input;
 
-use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::io::{self, Write};
 use std::path::Path;
@@ -162,10 +161,8 @@ fn theme_preview_file() -> Input {
 pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<()> {
     let assets = HighlightingAssets::new(cache_dir)?;
     let mut config = cfg.clone();
-    let mut style = HashSet::new();
-    style.insert(StyleComponent::Plain);
     config.language = Some("Rust");
-    config.style_components = StyleComponents(style);
+    config.style_components = StyleComponents::new(&[StyleComponent::Plain]);
 
     let stdout = io::stdout();
     let mut stdout = stdout.lock();

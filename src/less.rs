@@ -3,7 +3,7 @@
 use std::ffi::OsStr;
 use std::process::Command;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LessVersion {
     Less(usize),
     BusyBox,

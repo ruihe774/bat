@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::line_range::{HighlightedLineRanges, LineRanges};
 #[cfg(feature = "paging")]
 use crate::paging::PagingMode;
@@ -6,7 +8,7 @@ use crate::style::StyleComponents;
 use crate::syntax_mapping::SyntaxMapping;
 use crate::wrapping::WrappingMode;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VisibleLines {
     /// Show all lines which are included in the line ranges
     Ranges(LineRanges),
@@ -32,13 +34,13 @@ impl Default for VisibleLines {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config<'a> {
     /// The explicitly configured language, if any
     pub language: Option<&'a str>,
 
     /// The configured notation for non-printable characters
-    pub nonprintable_notation: NonprintableNotation,
+    pub nonprintable_notation: Option<NonprintableNotation>,
 
     /// The character width of the terminal
     pub term_width: usize,
@@ -73,6 +75,7 @@ pub struct Config<'a> {
     pub theme: Option<String>,
 
     /// File extension/name mappings
+    #[serde(skip)]
     pub syntax_mapping: SyntaxMapping<'a>,
 
     /// Command to start the pager

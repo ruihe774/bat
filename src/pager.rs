@@ -2,7 +2,7 @@ use shell_words::ParseError;
 use std::env;
 
 /// If we use a pager, this enum tells us from where we were told to use it.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum PagerSource {
     /// From --config
     Config,
@@ -18,7 +18,7 @@ pub(crate) enum PagerSource {
 }
 
 /// We know about some pagers, for example 'less'. This is a list of all pagers we know about
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum PagerKind {
     /// bat
     Bat,

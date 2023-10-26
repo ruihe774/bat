@@ -26,7 +26,7 @@ impl Display for InvalidPagerValueBat {
 impl std::error::Error for InvalidPagerValueBat {}
 
 #[cfg(feature = "paging")]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum SingleScreenAction {
     Quit,
     Nothing,

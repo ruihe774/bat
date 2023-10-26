@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::env;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -15,7 +14,6 @@ use console::Term;
 
 use crate::input::{new_file_input, new_stdin_input};
 use bat::{
-    bat_warning,
     config::{Config, VisibleLines},
     error::*,
     input::Input,
@@ -89,7 +87,7 @@ impl App {
     }
 
     pub fn config(&self, inputs: &[Input]) -> Result<Config> {
-        let style_components = self.style_components()?;
+        let style_components = self.style_components();
 
         let paging_mode = match self.matches.get_one::<String>("paging").map(|s| s.as_str()) {
             Some("always") => PagingMode::Always,
@@ -189,9 +187,10 @@ impl App {
                     .get_one::<String>("nonprintable-notation")
                     .map(|s| s.as_str()),
             ) {
-                (true, None) => NonprintableNotation::Unicode,
-                (_, Some("unicode")) => NonprintableNotation::Unicode,
-                (_, Some("caret")) => NonprintableNotation::Caret,
+                (true, None) => Some(NonprintableNotation::Unicode),
+                (_, Some("unicode")) => Some(NonprintableNotation::Unicode),
+                (_, Some("caret")) => Some(NonprintableNotation::Caret),
+                (false, None) => None,
                 _ => unreachable!("other values for --nonprintable-notation are not allowed"),
             },
             wrapping_mode: if self.interactive_output || maybe_term_width.is_some() {
@@ -343,15 +342,15 @@ impl App {
         Ok(file_input)
     }
 
-    fn style_components(&self) -> Result<StyleComponents> {
+    fn style_components(&self) -> StyleComponents {
         let matches = &self.matches;
-        let mut styled_components = StyleComponents(
+        let components =
             if matches.get_one::<String>("decorations").map(|s| s.as_str()) == Some("never") {
-                HashSet::new()
+                Vec::new()
             } else if matches.get_flag("number") {
-                [StyleComponent::LineNumbers].iter().cloned().collect()
+                vec![StyleComponent::LineNumbers]
             } else if 0 < matches.get_count("plain") {
-                [StyleComponent::Plain].iter().cloned().collect()
+                vec![StyleComponent::Plain]
             } else {
                 matches
                     .get_one::<String>("style")
@@ -364,19 +363,10 @@ impl App {
                     })
                     .unwrap_or_else(|| vec![StyleComponent::Full])
                     .into_iter()
-                    .map(|style| style.components(self.interactive_output))
-                    .fold(HashSet::new(), |mut acc, components| {
-                        acc.extend(components.iter().cloned());
-                        acc
-                    })
-            },
-        );
-
-        // If `grid` is set, remove `rule` as it is a subset of `grid`, and print a warning.
-        if styled_components.grid() && styled_components.0.remove(&StyleComponent::Rule) {
-            bat_warning!("Style 'rule' is a subset of style 'grid', 'rule' will not be visible.");
-        }
-
-        Ok(styled_components)
+                    .flat_map(|style| style.components(self.interactive_output))
+                    .copied()
+                    .collect()
+            };
+        StyleComponents::new(components.as_slice())
     }
 }

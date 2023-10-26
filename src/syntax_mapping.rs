@@ -6,7 +6,7 @@ use os_str_bytes::RawOsString;
 
 use crate::error::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MappingTarget<'a> {
     /// For mapping a path to a specific syntax.
     MapTo(&'a str),

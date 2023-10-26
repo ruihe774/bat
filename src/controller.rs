@@ -169,7 +169,7 @@ impl<'b> Controller<'b> {
         };
 
         if self.config.loop_through {
-            let mut printer = SimplePrinter::new(self.config, &mut opened_input);
+            let mut printer = SimplePrinter::new(self.config);
             self.print_file(
                 &mut printer,
                 writer,

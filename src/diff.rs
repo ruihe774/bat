@@ -4,7 +4,7 @@ use std::path::Path;
 
 use git2::{DiffOptions, IntoCString, Repository};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LineChange {
     Added,
     RemovedAbove,

@@ -1,8 +1,10 @@
 use std::fmt::Display;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct LineRange {
     lower: usize,
     upper: usize,
@@ -197,7 +199,7 @@ pub enum RangeCheckResult {
     AfterLastRange,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LineRanges {
     ranges: Vec<LineRange>,
     largest_upper_bound: usize,
@@ -241,7 +243,8 @@ impl Default for LineRanges {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct HighlightedLineRanges(pub LineRanges);
 
 impl Default for HighlightedLineRanges {

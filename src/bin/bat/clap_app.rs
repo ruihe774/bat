@@ -63,10 +63,8 @@ pub fn build_app(interactive_output: bool) -> Command {
             Arg::new("nonprintable-notation")
                 .long("nonprintable-notation")
                 .action(ArgAction::Set)
-                .default_value("unicode")
                 .value_parser(["unicode", "caret"])
                 .value_name("notation")
-                .hide_default_value(true)
                 .help("Set notation for non-printable characters.")
                 .long_help(
                     "Set notation for non-printable characters.\n\n\

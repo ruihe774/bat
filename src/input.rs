@@ -201,7 +201,7 @@ impl Input {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ContentType {
     /// "binary" data
     Binary(Option<String>),

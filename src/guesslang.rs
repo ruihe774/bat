@@ -44,7 +44,7 @@ impl GuessLang {
         let output = output.view();
         let (index, prob) = output
             .iter()
-            .cloned()
+            .copied()
             .enumerate()
             .max_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Equal))
             .unwrap();

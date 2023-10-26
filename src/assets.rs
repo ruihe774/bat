@@ -262,7 +262,7 @@ impl HighlightingAssets {
         }
     }
 
-    pub(crate) fn get_theme(&self, theme: &str) -> Result<&Theme> {
+    pub fn get_theme(&self, theme: &str) -> Result<&Theme> {
         self.theme_set.get(theme).ok_or_else(|| {
             UnknownTheme {
                 name: theme.to_owned(),

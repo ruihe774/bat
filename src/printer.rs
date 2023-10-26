@@ -2,16 +2,14 @@ use std::fmt::{self, Write};
 use std::io;
 use std::vec::Vec;
 
+use console::AnsiCodeIterator;
 use nu_ansi_term::Color::{Fixed, Green, Red, Yellow};
 use nu_ansi_term::Style;
-
-use console::AnsiCodeIterator;
-
+use serde::{Deserialize, Serialize};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::Color;
 use syntect::highlighting::Theme;
 use syntect::parsing::SyntaxSet;
-
 use unicode_width::UnicodeWidthChar;
 
 use crate::assets::{HighlightingAssets, SyntaxReferenceInSet, SyntaxUndetected};
@@ -25,10 +23,21 @@ use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
 use crate::line_range::RangeCheckResult;
 use crate::preprocessor::{expand_tabs, replace_nonprintable};
-
 use crate::terminal::{as_terminal_escaped, to_ansi_color};
 use crate::vscreen::AnsiStyle;
-use crate::wrapping::WrappingMode;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WrappingMode {
+    Character,
+    // The bool specifies whether wrapping has been explicitly disabled by the user via --wrap=never
+    NoWrapping(bool),
+}
+
+impl Default for WrappingMode {
+    fn default() -> Self {
+        WrappingMode::NoWrapping(false)
+    }
+}
 
 pub enum OutputHandle<'a> {
     IoWrite(&'a mut dyn io::Write),

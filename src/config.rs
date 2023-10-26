@@ -1,38 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use crate::line_range::{HighlightedLineRanges, LineRanges};
+use crate::controller::VisibleLines;
+use crate::line_range::HighlightedLineRanges;
 #[cfg(feature = "paging")]
-use crate::paging::PagingMode;
+use crate::pager::PagingMode;
 use crate::preprocessor::NonprintableNotation;
+use crate::printer::WrappingMode;
 use crate::style::StyleComponents;
 use crate::syntax_mapping::SyntaxMapping;
-use crate::wrapping::WrappingMode;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum VisibleLines {
-    /// Show all lines which are included in the line ranges
-    Ranges(LineRanges),
-
-    #[cfg(feature = "git")]
-    /// Only show lines surrounding added/deleted/modified lines
-    DiffContext(usize),
-}
-
-impl VisibleLines {
-    pub fn diff_mode(&self) -> bool {
-        match self {
-            Self::Ranges(_) => false,
-            #[cfg(feature = "git")]
-            Self::DiffContext(_) => true,
-        }
-    }
-}
-
-impl Default for VisibleLines {
-    fn default() -> Self {
-        VisibleLines::Ranges(LineRanges::default())
-    }
-}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config<'a> {

@@ -1,5 +1,15 @@
-use shell_words::ParseError;
 use std::env;
+
+use serde::{Deserialize, Serialize};
+use shell_words::ParseError;
+
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PagingMode {
+    Always,
+    QuitIfOneScreen,
+    #[default]
+    Never,
+}
 
 /// If we use a pager, this enum tells us from where we were told to use it.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

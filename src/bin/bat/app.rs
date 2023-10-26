@@ -14,7 +14,8 @@ use console::Term;
 
 use crate::input::{new_file_input, new_stdin_input};
 use bat::{
-    config::{Config, VisibleLines},
+    config::Config,
+    controller::VisibleLines,
     error::*,
     input::Input,
     line_range::{HighlightedLineRanges, LineRange, LineRanges},

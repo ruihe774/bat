@@ -7,9 +7,9 @@ use crate::error::*;
 #[cfg(feature = "paging")]
 use crate::less::{retrieve_less_version, LessVersion};
 #[cfg(feature = "paging")]
-use crate::paging::PagingMode;
+use crate::pager::PagingMode;
 #[cfg(feature = "paging")]
-use crate::wrapping::WrappingMode;
+use crate::printer::WrappingMode;
 
 #[derive(Debug)]
 pub struct InvalidPagerValueBat;

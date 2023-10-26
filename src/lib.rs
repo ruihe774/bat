@@ -8,7 +8,13 @@
 //! internal modules is much more likely to change. Some or all of these
 //! modules might be removed in the future.
 
-mod macros;
+#[macro_export]
+macro_rules! bat_warning {
+    ($($arg:tt)*) => ({
+        use nu_ansi_term::Color::Yellow;
+        eprintln!("{}: {}", Yellow.paint("[bat warning]"), format!($($arg)*));
+    })
+}
 
 pub mod assets;
 pub mod config;
@@ -27,22 +33,18 @@ pub mod line_range;
 mod output;
 #[cfg(feature = "paging")]
 mod pager;
-#[cfg(feature = "paging")]
-mod paging;
 mod preprocessor;
 mod printer;
 pub mod style;
 mod syntax_mapping;
 mod terminal;
 mod vscreen;
-mod wrapping;
 #[cfg(feature = "zero-copy")]
 mod zero_copy;
 
 pub use input::Input;
-pub use preprocessor::NonprintableNotation;
-pub use syntax_mapping::{MappingTarget, SyntaxMapping, SyntaxMappingBuilder};
-pub use wrapping::WrappingMode;
-
 #[cfg(feature = "paging")]
-pub use paging::PagingMode;
+pub use pager::PagingMode;
+pub use preprocessor::NonprintableNotation;
+pub use printer::WrappingMode;
+pub use syntax_mapping::{MappingTarget, SyntaxMapping, SyntaxMappingBuilder};

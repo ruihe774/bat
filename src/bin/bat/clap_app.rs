@@ -569,6 +569,7 @@ pub fn build_app(interactive_output: bool) -> Command {
 
     // Check if the current directory contains a file name cache. Otherwise,
     // enable the 'bat cache' subcommand.
+    #[cfg(feature = "build-assets")]
     if Path::new("cache").exists() {
         app
     } else {

@@ -271,15 +271,13 @@ fn run() -> Result<bool> {
     }
 
     match app.matches.subcommand() {
+        #[cfg(feature = "build-assets")]
         Some(("cache", cache_matches)) => {
             // If there is a file named 'cache' in the current working directory,
             // arguments for subcommand 'cache' are not mandatory.
             // If there are non-zero arguments, execute the subcommand cache, else, open the file cache.
             if cache_matches.args_present() {
-                #[cfg(feature = "build-assets")]
                 run_cache_subcommand(cache_matches, config_dir, cache_dir)?;
-                #[cfg(not(feature = "build-assets"))]
-                println!("bat has been built without the 'build-assets' feature. The 'cache --build' option is not available.");
                 Ok(true)
             } else {
                 let inputs = vec![Input::from_file("cache")];

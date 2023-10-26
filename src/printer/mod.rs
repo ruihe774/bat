@@ -3,7 +3,7 @@ use std::io;
 use std::vec::Vec;
 
 use console::AnsiCodeIterator;
-use nu_ansi_term::Color::{Fixed, Green, Red, Yellow};
+use nu_ansi_term::Color::{Fixed, Yellow};
 use nu_ansi_term::Style;
 use serde::{Deserialize, Serialize};
 use syntect::easy::HighlightLines;
@@ -14,17 +14,23 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::assets::{HighlightingAssets, SyntaxReferenceInSet, SyntaxUndetected};
 use crate::config::Config;
+use crate::controller::line_range::RangeCheckResult;
 #[cfg(feature = "git")]
 use crate::decorations::LineChangesDecoration;
-use crate::decorations::{Decoration, GridBorderDecoration, LineNumberDecoration};
 #[cfg(feature = "git")]
 use crate::diff::LineChanges;
 use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
-use crate::line_range::RangeCheckResult;
-use crate::preprocessor::{expand_tabs, replace_nonprintable};
-use crate::terminal::{as_terminal_escaped, to_ansi_color};
-use crate::vscreen::AnsiStyle;
+use decorations::{Decoration, GridBorderDecoration, LineNumberDecoration};
+use preprocessor::{expand_tabs, replace_nonprintable};
+use terminal::{as_terminal_escaped, to_ansi_color};
+use vscreen::AnsiStyle;
+
+mod decorations;
+pub mod preprocessor;
+pub mod style;
+mod terminal;
+mod vscreen;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WrappingMode {
@@ -39,7 +45,7 @@ impl Default for WrappingMode {
     }
 }
 
-pub enum OutputHandle<'a> {
+pub(crate) enum OutputHandle<'a> {
     IoWrite(&'a mut dyn io::Write),
     FmtWrite(&'a mut dyn fmt::Write),
 }
@@ -73,7 +79,7 @@ pub(crate) trait Printer {
     ) -> Result<()>;
 }
 
-pub struct SimplePrinter<'a> {
+pub(crate) struct SimplePrinter<'a> {
     config: &'a Config<'a>,
 }
 
@@ -719,12 +725,15 @@ impl<'a> Printer for InteractivePrinter<'a> {
 const DEFAULT_GUTTER_COLOR: u8 = 238;
 
 #[derive(Debug, Default)]
-pub struct Colors {
+pub(crate) struct Colors {
     pub grid: Style,
     pub rule: Style,
     pub header_value: Style,
+    #[cfg(feature = "git")]
     pub git_added: Style,
+    #[cfg(feature = "git")]
     pub git_removed: Style,
+    #[cfg(feature = "git")]
     pub git_modified: Style,
     pub line_number: Style,
 }
@@ -752,8 +761,11 @@ impl Colors {
             grid: gutter_style,
             rule: gutter_style,
             header_value: Style::new().bold(),
+            #[cfg(feature = "git")]
             git_added: Green.normal(),
+            #[cfg(feature = "git")]
             git_removed: Red.normal(),
+            #[cfg(feature = "git")]
             git_modified: Yellow.normal(),
             line_number: gutter_style,
         }

@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+use crate::assets::syntax_mapping::SyntaxMapping;
+use crate::controller::line_range::HighlightedLineRanges;
 use crate::controller::VisibleLines;
-use crate::line_range::HighlightedLineRanges;
 #[cfg(feature = "paging")]
-use crate::pager::PagingMode;
-use crate::preprocessor::NonprintableNotation;
+use crate::output::pager::PagingMode;
+use crate::printer::preprocessor::NonprintableNotation;
+use crate::printer::style::StyleComponents;
 use crate::printer::WrappingMode;
-use crate::style::StyleComponents;
-use crate::syntax_mapping::SyntaxMapping;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config<'a> {
@@ -69,7 +69,7 @@ pub struct Config<'a> {
 
 #[cfg(all(feature = "minimal-application", feature = "paging"))]
 pub fn get_pager_executable(config_pager: Option<&str>) -> Option<String> {
-    crate::pager::get_pager(config_pager)
+    crate::output::pager::get_pager(config_pager)
         .ok()
         .flatten()
         .map(|pager| pager.bin)
@@ -77,14 +77,14 @@ pub fn get_pager_executable(config_pager: Option<&str>) -> Option<String> {
 
 #[test]
 fn default_config_should_include_all_lines() {
-    use crate::line_range::{RangeCheckResult, LineRanges};
+    use crate::controller::line_range::{LineRanges, RangeCheckResult};
 
     assert_eq!(LineRanges::default().check(17), RangeCheckResult::InRange);
 }
 
 #[test]
 fn default_config_should_highlight_no_lines() {
-    use crate::line_range::RangeCheckResult;
+    use crate::controller::line_range::RangeCheckResult;
 
     assert_ne!(
         Config::default().highlighted_lines.0.check(17),

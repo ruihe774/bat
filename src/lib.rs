@@ -19,32 +19,7 @@ macro_rules! bat_warning {
 pub mod assets;
 pub mod config;
 pub mod controller;
-mod decorations;
-#[cfg(feature = "git")]
-mod diff;
 pub mod error;
-#[cfg(feature = "guesslang")]
-mod guesslang;
 pub mod input;
-mod less;
-#[cfg(feature = "lessopen")]
-mod lessopen;
-pub mod line_range;
-mod output;
-#[cfg(feature = "paging")]
-mod pager;
-mod preprocessor;
-mod printer;
-pub mod style;
-mod syntax_mapping;
-mod terminal;
-mod vscreen;
-#[cfg(feature = "zero-copy")]
-mod zero_copy;
-
-pub use input::Input;
-#[cfg(feature = "paging")]
-pub use pager::PagingMode;
-pub use preprocessor::NonprintableNotation;
-pub use printer::WrappingMode;
-pub use syntax_mapping::{MappingTarget, SyntaxMapping, SyntaxMappingBuilder};
+pub mod output;
+pub mod printer;

@@ -30,8 +30,8 @@ use bat::{
     controller::Controller,
     error::*,
     input::Input,
-    style::{StyleComponent, StyleComponents},
-    PagingMode,
+    output::pager::PagingMode,
+    printer::style::{StyleComponent, StyleComponents},
 };
 
 const THEME_PREVIEW_DATA: &[u8] = include_bytes!("../../../assets/theme_preview.rs");

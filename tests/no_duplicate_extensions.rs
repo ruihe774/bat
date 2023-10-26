@@ -26,7 +26,10 @@ fn no_duplicate_extensions() {
 
     let mut extensions = HashSet::new();
 
-    for syntax in assets.syntaxes().map(|name| assets.get_syntax_by_name(name).unwrap().syntax) {
+    for syntax in assets
+        .syntaxes()
+        .map(|name| assets.get_syntax_by_name(name).unwrap().syntax)
+    {
         for extension in &syntax.file_extensions {
             assert!(
                 KNOWN_EXCEPTIONS.contains(&extension.as_str()) || extensions.insert(extension),

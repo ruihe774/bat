@@ -116,22 +116,23 @@ impl<'a> SyntaxMappingBuilder<'a> {
 
     pub fn with_builtin(mut self) -> Self {
         use MappingTarget::*;
-        self.mapping.extend(
-            include!("../assets/syntax_mapping.ron")
-                .into_iter()
-                .map(|(s, t)| {
-                    (
-                        GlobBuilder::new(s)
-                            .case_insensitive(true)
-                            .literal_separator(true)
-                            .build()
-                            .expect("invalid builtin syntax mapping"),
-                        t,
-                    )
-                }),
-        );
+        self.mapping
+            .extend(
+                include!("../../assets/syntax_mapping.ron")
+                    .into_iter()
+                    .map(|(s, t)| {
+                        (
+                            GlobBuilder::new(s)
+                                .case_insensitive(true)
+                                .literal_separator(true)
+                                .build()
+                                .expect("invalid builtin syntax mapping"),
+                            t,
+                        )
+                    }),
+            );
         self.ignored_suffixes.extend(
-            include!("../assets/ignored_suffixes.ron")
+            include!("../../assets/ignored_suffixes.ron")
                 .into_iter()
                 .map(|s| s.to_owned()),
         );

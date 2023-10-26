@@ -14,21 +14,20 @@ use syntect::highlighting::Theme;
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
 use crate::error::*;
-#[cfg(feature = "guesslang")]
-use crate::guesslang::GuessLang;
-use crate::input::{InputReader, OpenedInput};
-use crate::syntax_mapping::MappingTarget;
 #[cfg(feature = "zero-copy")]
-use crate::zero_copy::{leak_mmap, LeakySliceReader};
-use crate::SyntaxMapping;
-
-#[cfg(feature = "build-assets")]
-pub use build_assets::build;
+use crate::input::zero_copy::{leak_mmap, LeakySliceReader};
+use crate::input::{InputReader, OpenedInput};
+#[cfg(feature = "guesslang")]
+use guesslang::GuessLang;
 use lazy_theme_set::LazyThemeSet;
+use syntax_mapping::{MappingTarget, SyntaxMapping};
 
 #[cfg(feature = "build-assets")]
-mod build_assets;
+pub mod build_assets;
+#[cfg(feature = "guesslang")]
+mod guesslang;
 mod lazy_theme_set;
+pub mod syntax_mapping;
 
 #[cfg(feature = "guesslang")]
 macro_rules! include_asset_bytes {
@@ -118,11 +117,11 @@ impl HighlightingAssets {
     pub fn new(cache_path: impl AsRef<Path>) -> Result<Self> {
         let cache_path = cache_path.as_ref();
         Ok(HighlightingAssets {
-            syntax_set: include_asset!("../assets/syntaxes.gz", Some(cache_path))?,
-            theme_set: include_asset!("../assets/themes.gz", Some(cache_path))?,
+            syntax_set: include_asset!("../../assets/syntaxes.gz", Some(cache_path))?,
+            theme_set: include_asset!("../../assets/themes.gz", Some(cache_path))?,
             #[cfg(feature = "guesslang")]
             guesslang: GuessLang::new(include_asset_bytes!(
-                "../assets/guesslang.ort.gz",
+                "../../assets/guesslang.ort.gz",
                 Some(cache_path)
             )?),
         })
@@ -131,11 +130,12 @@ impl HighlightingAssets {
     #[cfg(debug_assertions)]
     pub fn with_no_cache() -> Self {
         HighlightingAssets {
-            syntax_set: include_asset!("../assets/syntaxes.gz", Option::<&Path>::None).unwrap(),
-            theme_set: include_asset!("../assets/themes.gz", Option::<&Path>::None).unwrap(),
+            syntax_set: include_asset!("../../assets/syntaxes.gz", Option::<&Path>::None).unwrap(),
+            theme_set: include_asset!("../../assets/themes.gz", Option::<&Path>::None).unwrap(),
             #[cfg(feature = "guesslang")]
             guesslang: GuessLang::new(
-                include_asset_bytes!("../assets/guesslang.ort.gz", Option::<&Path>::None).unwrap(),
+                include_asset_bytes!("../../assets/guesslang.ort.gz", Option::<&Path>::None)
+                    .unwrap(),
             ),
         }
     }
@@ -381,7 +381,7 @@ impl HighlightingAssets {
 }
 
 pub fn get_acknowledgements() -> String {
-    include_asset!("../assets/acknowledgements.gz", Option::<&Path>::None).unwrap()
+    include_asset!("../../assets/acknowledgements.gz", Option::<&Path>::None).unwrap()
 }
 
 #[cfg(target_os = "macos")]
@@ -526,8 +526,8 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
-    use crate::SyntaxMappingBuilder;
     use crate::input::Input;
+    use syntax_mapping::SyntaxMappingBuilder;
 
     struct SyntaxDetectionTest {
         assets: HighlightingAssets,
@@ -539,7 +539,8 @@ mod tests {
         fn new(syntax_mapping: Option<SyntaxMapping<'static>>) -> Self {
             SyntaxDetectionTest {
                 assets: HighlightingAssets::with_no_cache(),
-                syntax_mapping: syntax_mapping.unwrap_or_else(||SyntaxMappingBuilder::new().with_builtin().build().unwrap()),
+                syntax_mapping: syntax_mapping
+                    .unwrap_or_else(|| SyntaxMappingBuilder::new().with_builtin().build().unwrap()),
                 temp_dir: TempDir::new().expect("creation of temporary directory"),
             }
         }
@@ -651,7 +652,16 @@ mod tests {
 
     #[test]
     fn syntax_detection_same_for_inputkinds() {
-        let test = SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.myext", MappingTarget::MapTo("C")).unwrap().map_syntax("MY_FILE", MappingTarget::MapTo("Markdown")).unwrap().build().unwrap()));
+        let test = SyntaxDetectionTest::new(Some(
+            SyntaxMappingBuilder::new()
+                .with_builtin()
+                .map_syntax("*.myext", MappingTarget::MapTo("C"))
+                .unwrap()
+                .map_syntax("MY_FILE", MappingTarget::MapTo("Markdown"))
+                .unwrap()
+                .build()
+                .unwrap(),
+        ));
 
         assert!(test.syntax_is_same_for_inputkinds("Test.md", ""));
         assert!(test.syntax_is_same_for_inputkinds("Test.txt", "#!/bin/bash"));
@@ -694,8 +704,22 @@ mod tests {
 
     #[test]
     fn syntax_detection_with_custom_mapping() {
-        assert_eq!(SyntaxDetectionTest::new(None).syntax_for_file("test.h"), "C++");
-        assert_eq!(SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.h", MappingTarget::MapTo("C")).unwrap().build().unwrap())).syntax_for_file("test.h"), "C");
+        assert_eq!(
+            SyntaxDetectionTest::new(None).syntax_for_file("test.h"),
+            "C++"
+        );
+        assert_eq!(
+            SyntaxDetectionTest::new(Some(
+                SyntaxMappingBuilder::new()
+                    .with_builtin()
+                    .map_syntax("*.h", MappingTarget::MapTo("C"))
+                    .unwrap()
+                    .build()
+                    .unwrap()
+            ))
+            .syntax_for_file("test.h"),
+            "C"
+        );
     }
 
     #[test]
@@ -715,7 +739,14 @@ mod tests {
             "Plain Text"
         );
 
-        let test = SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.txt", MappingTarget::MapExtensionToUnknown).unwrap().build().unwrap()));
+        let test = SyntaxDetectionTest::new(Some(
+            SyntaxMappingBuilder::new()
+                .with_builtin()
+                .map_syntax("*.txt", MappingTarget::MapExtensionToUnknown)
+                .unwrap()
+                .build()
+                .unwrap(),
+        ));
 
         // If we setup MapExtensionToUnknown on *.txt, the match on the full
         // file name of "CMakeLists.txt" shall have higher prio, and CMake shall
@@ -743,7 +774,14 @@ mod tests {
         assert_eq!(test.syntax_for_file("README.MD"), "Markdown");
 
         // // Adding a mapping for "MD" in addition to "md" should not break the mapping
-        let test = SyntaxDetectionTest::new(Some(SyntaxMappingBuilder::new().with_builtin().map_syntax("*.MD", MappingTarget::MapTo("Markdown")).unwrap().build().unwrap()));
+        let test = SyntaxDetectionTest::new(Some(
+            SyntaxMappingBuilder::new()
+                .with_builtin()
+                .map_syntax("*.MD", MappingTarget::MapTo("Markdown"))
+                .unwrap()
+                .build()
+                .unwrap(),
+        ));
 
         assert_eq!(test.syntax_for_file("README.md"), "Markdown");
         assert_eq!(test.syntax_for_file("README.mD"), "Markdown");

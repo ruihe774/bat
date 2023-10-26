@@ -4,12 +4,14 @@ use std::io::{self, Write};
 use std::process::Child;
 
 use crate::error::*;
-#[cfg(feature = "paging")]
-use crate::less::{retrieve_less_version, LessVersion};
-#[cfg(feature = "paging")]
-use crate::pager::PagingMode;
-#[cfg(feature = "paging")]
 use crate::printer::WrappingMode;
+#[cfg(feature = "paging")]
+use less::{retrieve_less_version, LessVersion};
+use pager::PagingMode;
+
+#[cfg(feature = "paging")]
+mod less;
+pub mod pager;
 
 #[derive(Debug)]
 pub struct InvalidPagerValueBat;
@@ -33,7 +35,7 @@ enum SingleScreenAction {
 }
 
 #[derive(Debug)]
-pub enum OutputType {
+pub(crate) enum OutputType {
     #[cfg(feature = "paging")]
     Pager(Child),
     Stdout(io::Stdout),
@@ -63,7 +65,7 @@ impl OutputType {
         wrapping_mode: WrappingMode,
         pager_from_config: Option<&str>,
     ) -> Result<Self> {
-        use crate::pager::{self, PagerKind, PagerSource};
+        use pager::{PagerKind, PagerSource};
         use std::process::{Command, Stdio};
 
         let pager_opt = pager::get_pager(pager_from_config)?;

@@ -6,8 +6,8 @@ use crate::{
     clap_app,
     config::{get_args_from_config_file, get_args_from_env_opts_var, get_args_from_env_vars},
 };
+use bat::assets::syntax_mapping::{MappingTarget, SyntaxMappingBuilder};
 use bat::input::InputKind;
-use bat::{MappingTarget, SyntaxMappingBuilder};
 use clap::ArgMatches;
 
 use console::Term;
@@ -15,12 +15,14 @@ use console::Term;
 use crate::input::{new_file_input, new_stdin_input};
 use bat::{
     config::Config,
+    controller::line_range::{HighlightedLineRanges, LineRange, LineRanges},
     controller::VisibleLines,
     error::*,
     input::Input,
-    line_range::{HighlightedLineRanges, LineRange, LineRanges},
-    style::{StyleComponent, StyleComponents},
-    NonprintableNotation, PagingMode, WrappingMode,
+    output::pager::PagingMode,
+    printer::preprocessor::NonprintableNotation,
+    printer::style::{StyleComponent, StyleComponents},
+    printer::WrappingMode,
 };
 
 fn is_truecolor_terminal() -> bool {
@@ -142,7 +144,8 @@ impl App {
                     return Err(Error::msg("Invalid syntax mapping. The format of the -m/--map-syntax option is '<glob-pattern>:<syntax-name>'. For example: '*.cpp:C++'."));
                 }
 
-                syntax_mapping_builder = syntax_mapping_builder.map_syntax(parts[0], MappingTarget::MapTo(parts[1]))?;
+                syntax_mapping_builder =
+                    syntax_mapping_builder.map_syntax(parts[0], MappingTarget::MapTo(parts[1]))?;
             }
         }
 

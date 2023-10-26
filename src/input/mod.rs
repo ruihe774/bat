@@ -14,7 +14,9 @@ use memmap2::MmapOptions;
 
 use crate::error::*;
 #[cfg(feature = "zero-copy")]
-use crate::zero_copy::{leak_mmap, LeakySliceReader};
+use zero_copy::{leak_mmap, LeakySliceReader};
+
+pub(crate) mod zero_copy;
 
 #[derive(Debug)]
 pub struct IoCircle {

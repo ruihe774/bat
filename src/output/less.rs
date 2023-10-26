@@ -1,5 +1,3 @@
-#![cfg(feature = "paging")]
-
 use std::ffi::OsStr;
 use std::process::Command;
 

@@ -13,11 +13,17 @@ use crate::input::{Input, InputReader, OpenedInput};
 use crate::lessopen::LessOpenPreprocessor;
 #[cfg(feature = "git")]
 use crate::line_range::LineRange;
-use crate::line_range::{LineRanges, RangeCheckResult};
-use crate::output::OutputType;
 #[cfg(feature = "paging")]
-use crate::pager::PagingMode;
+use crate::output::pager::PagingMode;
+use crate::output::OutputType;
 use crate::printer::{InteractivePrinter, OutputHandle, Printer, SimplePrinter};
+use line_range::{LineRanges, RangeCheckResult};
+
+#[cfg(feature = "git")]
+mod diff;
+#[cfg(feature = "lessopen")]
+mod lessopen;
+pub mod line_range;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VisibleLines {

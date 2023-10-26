@@ -1,8 +1,10 @@
 use std::env;
 use std::ffi::OsString;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::PathBuf;
+
+use bat::config::Config;
 
 use crate::directories::PROJECT_DIRS;
 
@@ -22,15 +24,15 @@ pub fn system_config_file() -> PathBuf {
     path
 }
 
-pub fn config_file() -> PathBuf {
+pub fn config_file_path() -> PathBuf {
     env::var("BAT_CONFIG_PATH")
         .ok()
         .map(|path| fs::canonicalize(path).expect("invalid env BAT_CONFIG_PATH"))
-        .unwrap_or_else(|| PROJECT_DIRS.config_dir().join("config"))
+        .unwrap_or_else(|| PROJECT_DIRS.config_dir().join("config.ron"))
 }
 
-pub fn generate_config_file() -> bat::error::Result<()> {
-    let config_file = config_file();
+pub fn generate_config_file(config: &Config<'_>) -> bat::error::Result<()> {
+    let config_file = config_file_path();
     if config_file.is_file() {
         println!(
             "A config file already exists at: {}",
@@ -50,39 +52,19 @@ pub fn generate_config_file() -> bat::error::Result<()> {
         fs::create_dir_all(config_dir)?
     }
 
-    let default_config = r#"# This is `bat`s configuration file. Each line either contains a comment or
-# a command-line option that you want to pass to `bat` by default. You can
-# run `bat --help` to get a list of all possible configuration options.
+    ron::ser::to_writer_pretty(
+        io::BufWriter::new(
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&config_file)?,
+        ),
+        config,
+        Default::default(),
+    )?;
 
-# Specify desired highlighting theme (e.g. "TwoDark"). Run `bat --list-themes`
-# for a list of all available themes
-#--theme="TwoDark"
-
-# Enable this to use italic text on the terminal. This is not supported on all
-# terminal emulators (like tmux, by default):
-#--italic-text=always
-
-# Uncomment the following line to disable automatic paging:
-#--paging=never
-
-# Uncomment the following line if you are using less version >= 551 and want to
-# enable mouse scrolling support in `bat` when running inside tmux. This might
-# disable text selection, unless you press shift.
-#--pager="less --RAW-CONTROL-CHARS --quit-if-one-screen --mouse"
-
-# Syntax mappings: map a certain filename pattern to a language.
-#   Example 1: use the C++ syntax for Arduino .ino files
-#   Example 2: Use ".gitignore"-style highlighting for ".ignore" files
-#--map-syntax "*.ino:C++"
-#--map-syntax ".ignore:Git Ignore"
-"#;
-
-    fs::write(&config_file, default_config)?;
-
-    println!(
-        "Success! Config file written to {}",
-        config_file.to_string_lossy()
-    );
+    println!("Success! Config file written to {}", config_file.display());
 
     Ok(())
 }
@@ -95,7 +77,7 @@ pub fn get_args_from_config_file() -> Result<Vec<OsString>, shell_words::ParseEr
         config.push('\n');
     }
 
-    if let Ok(c) = fs::read_to_string(config_file()) {
+    if let Ok(c) = fs::read_to_string(config_file_path()) {
         config.push_str(&c);
     }
 

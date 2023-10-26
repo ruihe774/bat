@@ -1,9 +1,7 @@
-use clap::{
-    crate_name, crate_version, value_parser, Arg, ArgAction, ArgGroup, ColorChoice, Command,
-};
+use clap::{crate_name, crate_version, value_parser, Arg, ArgAction, ColorChoice, Command};
 use once_cell::sync::Lazy;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 static VERSION: Lazy<String> = Lazy::new(|| {
     #[cfg(feature = "bugreport")]
@@ -567,10 +565,13 @@ pub fn build_app(interactive_output: bool) -> Command {
                 .help("Show acknowledgements."),
         );
 
+    #[cfg(not(feature = "build-assets"))]
+    return app;
+
     // Check if the current directory contains a file name cache. Otherwise,
     // enable the 'bat cache' subcommand.
     #[cfg(feature = "build-assets")]
-    if Path::new("cache").exists() {
+    return if Path::new("cache").exists() {
         app
     } else {
         app.subcommand(
@@ -638,7 +639,7 @@ pub fn build_app(interactive_output: bool) -> Command {
             "You can use 'bat cache' to customize syntaxes and themes. \
             See 'bat cache --help' for more information",
         )
-    }
+    };
 }
 
 #[test]

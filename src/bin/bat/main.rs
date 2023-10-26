@@ -17,7 +17,7 @@ use nu_ansi_term::Style;
 
 use crate::{
     app::App,
-    config::{config_file, generate_config_file},
+    config::{config_file_path, generate_config_file},
 };
 
 #[cfg(feature = "bugreport")]
@@ -239,7 +239,7 @@ fn invoke_bugreport(app: &App, cache_dir: &Path) {
             "MANPAGER",
         ]))
         .info(FileContent::new("System Config file", system_config_file()))
-        .info(FileContent::new("Config file", config_file()))
+        .info(FileContent::new("Config file", config_file_path()))
         .info(DirectoryEntries::new("Cached assets", cache_dir))
         .info(CompileTimeInformation::default());
 
@@ -305,10 +305,10 @@ fn run() -> Result<bool> {
                 list_themes(&config, config_dir, cache_dir)?;
                 Ok(true)
             } else if app.matches.get_flag("config-file") {
-                println!("{}", config_file().to_string_lossy());
+                println!("{}", config_file_path().to_string_lossy());
                 Ok(true)
             } else if app.matches.get_flag("generate-config-file") {
-                generate_config_file()?;
+                generate_config_file(&config)?;
                 Ok(true)
             } else if app.matches.get_flag("config-dir") {
                 writeln!(io::stdout(), "{}", config_dir.to_string_lossy())?;

@@ -142,11 +142,7 @@ impl<'a> SyntaxMappingBuilder<'a> {
         SyntaxMapping::new(self.mapping, self.ignored_suffixes)
     }
 
-    pub fn map_syntax<'b>(
-        &mut self,
-        glob: &'b str,
-        target: MappingTarget<'a>,
-    ) -> Result<&mut Self> {
+    pub fn map_syntax(&mut self, glob: &'_ str, target: MappingTarget<'a>) -> Result<&mut Self> {
         self.mapping.push((
             GlobBuilder::new(glob)
                 .case_insensitive(true)
@@ -157,8 +153,14 @@ impl<'a> SyntaxMappingBuilder<'a> {
         Ok(self)
     }
 
-    pub fn ignored_suffix<'b>(&mut self, suffix: String) -> &mut Self {
+    pub fn ignored_suffix(&mut self, suffix: String) -> &mut Self {
         self.ignored_suffixes.push(suffix);
         self
+    }
+}
+
+impl<'a> Default for SyntaxMappingBuilder<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }

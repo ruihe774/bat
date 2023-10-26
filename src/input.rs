@@ -1,7 +1,7 @@
 use std::borrow::Cow;
-use std::convert::{TryFrom, TryInto};
+use std::error::Error as StdError;
 use std::ffi::{OsStr, OsString};
-use std::fmt::Display;
+use std::fmt::{self, Display};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -17,30 +17,34 @@ use crate::error::*;
 use crate::zero_copy::{leak_mmap, LeakySliceReader};
 
 #[derive(Debug)]
-pub struct IoCircle(PathBuf);
+pub struct IoCircle {
+    pub path: PathBuf,
+}
 
 impl Display for IoCircle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "IO circle detected for '{}'", self.0.display())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "IO circle detected for '{}'", self.path.display())
     }
 }
 
-impl std::error::Error for IoCircle {}
+impl StdError for IoCircle {}
 
 #[derive(Debug)]
-pub struct IsDirectory(PathBuf);
+pub struct IsDirectory {
+    pub path: PathBuf,
+}
 
 impl Display for IsDirectory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}' is a directory", self.0.display())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}' is a directory", self.path.display())
     }
 }
 
-impl std::error::Error for IsDirectory {}
+impl StdError for IsDirectory {}
 
 /// A description of an Input source.
 /// This tells bat how to refer to the input.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct InputDescription {
     pub name: Option<OsString>,
     pub kind: String,
@@ -128,7 +132,10 @@ impl Input {
                 if let Some(stdout) = stdout_identifier {
                     let input_identifier = Identifier::try_from(clircle::Stdio::Stdin)?;
                     if stdout.surely_conflicts_with(&input_identifier) {
-                        return Err(IoCircle("stdin".into()).into());
+                        return Err(IoCircle {
+                            path: "STDIN".into(),
+                        }
+                        .into());
                     }
                 }
 
@@ -145,24 +152,39 @@ impl Input {
                 kind: OpenedInputKind::OrdinaryFile(path.clone()),
                 description,
                 reader: {
-                    let mut file = File::open(&path)?;
-                    if file.metadata()?.is_dir() {
-                        return Err(IsDirectory(path).into());
+                    let mut file = File::open(&path)
+                        .with_context(|| format!("failed to open '{}'", path.display()))?;
+                    let metadata = file.metadata().with_context(|| {
+                        format!("failed to get metadata of '{}'", path.display())
+                    })?;
+                    if metadata.is_dir() {
+                        return Err(IsDirectory { path }.into());
                     }
 
                     if let Some(stdout) = stdout_identifier {
                         let input_identifier = Identifier::try_from(file)?;
                         if stdout.surely_conflicts_with(&input_identifier) {
-                            return Err(IoCircle(path).into());
+                            return Err(IoCircle { path }.into());
                         }
                         file = input_identifier.into_inner().unwrap();
                     }
 
                     #[cfg(feature = "zero-copy")]
-                    let r = unsafe { MmapOptions::new().map_copy(&file) }.map_or_else(
-                        |_| InputReader::new(BufReader::new(file)),
-                        |mmap| InputReader::new(LeakySliceReader::new(leak_mmap(mmap))),
-                    );
+                    let r = metadata
+                        .is_file()
+                        .then_some(metadata.len())
+                        .and_then(|len| {
+                            unsafe {
+                                MmapOptions::new()
+                                    .len(isize::try_from(len).ok()?.try_into().unwrap())
+                                    .map_copy(&file)
+                            }
+                            .ok()
+                        })
+                        .map_or_else(
+                            || InputReader::new(BufReader::new(file)),
+                            |mmap| InputReader::new(LeakySliceReader::new(leak_mmap(mmap))),
+                        );
                     #[cfg(not(feature = "zero-copy"))]
                     let r = InputReader::new(BufReader::new(file));
                     r

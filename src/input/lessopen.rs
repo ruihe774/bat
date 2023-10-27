@@ -130,6 +130,7 @@ impl LessOpen {
 
             let all_args = shell_words::split(lessopen.as_str())?;
             let (script, args) = all_args.split_first().unwrap();
+            let script = grep_cli::resolve_binary(script)?;
 
             let mut child = run_script(
                 script,
@@ -225,7 +226,9 @@ impl Drop for LessOpen {
 
         // call lessclose
         if !self.close.is_empty() {
-            let (script, args) = self.close.split_first().unwrap();
+            let (script, args) = self.close.split_first_mut().unwrap();
+            let script = grep_cli::resolve_binary(script.as_str())
+                .unwrap_or_else(|_| mem::take(script).into());
             _ = run_script(script, args, Stdio::null(), Stdio::null())
                 .and_then(|mut child| child.wait())
         }

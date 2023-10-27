@@ -5,24 +5,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::assets::HighlightingAssets;
 use crate::config::Config;
-#[cfg(feature = "git")]
-use crate::diff::{get_git_diff, LineChanges};
 use crate::error::*;
 use crate::input::{Input, InputReader, OpenedInput};
-#[cfg(feature = "lessopen")]
-use crate::lessopen::LessOpenPreprocessor;
-#[cfg(feature = "git")]
-use crate::line_range::LineRange;
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
 use crate::output::OutputType;
 use crate::printer::{InteractivePrinter, OutputHandle, Printer, SimplePrinter};
+#[cfg(feature = "git")]
+use diff::{get_git_diff, LineChanges};
+#[cfg(feature = "git")]
+use line_range::LineRange;
 use line_range::{LineRanges, RangeCheckResult};
 
 #[cfg(feature = "git")]
 mod diff;
-#[cfg(feature = "lessopen")]
-mod lessopen;
 pub mod line_range;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,18 +50,11 @@ impl Default for VisibleLines {
 pub struct Controller<'a> {
     config: &'a Config<'a>,
     assets: &'a HighlightingAssets,
-    #[cfg(feature = "lessopen")]
-    preprocessor: Option<LessOpenPreprocessor>,
 }
 
 impl<'b> Controller<'b> {
     pub fn new<'a>(config: &'a Config, assets: &'a HighlightingAssets) -> Controller<'a> {
-        Controller {
-            config,
-            assets,
-            #[cfg(feature = "lessopen")]
-            preprocessor: LessOpenPreprocessor::new().ok(),
-        }
+        Controller { config, assets }
     }
 
     pub fn run(
@@ -159,18 +148,11 @@ impl<'b> Controller<'b> {
         stdout_identifier: Option<&Identifier>,
         is_first: bool,
     ) -> Result<()> {
-        let mut opened_input = {
-            #[cfg(feature = "lessopen")]
-            match self.preprocessor {
-                Some(ref preprocessor) if self.config.use_lessopen => {
-                    preprocessor.open(input, stdin, stdout_identifier)?
-                }
-                _ => input.open(stdin, stdout_identifier)?,
-            }
-
-            #[cfg(not(feature = "lessopen"))]
-            input.open(stdout_identifier)?
-        };
+        let mut opened_input = input.open(
+            stdout_identifier,
+            #[cfg(all(unix, feature = "lessopen"))]
+            self.config.use_lessopen,
+        )?;
         #[cfg(feature = "git")]
         let line_changes = if self.config.visible_lines.diff_mode()
             || (!self.config.loop_through && self.config.style_components.changes())

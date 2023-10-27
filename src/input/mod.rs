@@ -13,9 +13,14 @@ use clircle::{Clircle, Identifier};
 use memmap2::MmapOptions;
 
 use crate::error::*;
+#[cfg(all(unix, feature = "lessopen"))]
+use lessopen::LessOpen;
 #[cfg(feature = "zero-copy")]
 use zero_copy::{leak_mmap, LeakySliceReader};
 
+#[cfg(all(unix, feature = "lessopen"))]
+pub mod lessopen;
+#[cfg(feature = "zero-copy")]
 pub(crate) mod zero_copy;
 
 #[derive(Debug)]
@@ -89,11 +94,14 @@ pub(crate) enum OpenedInputKind {
     CustomReader,
 }
 
+#[allow(dead_code)]
 pub(crate) struct OpenedInput {
     #[cfg(feature = "git")]
     pub(crate) kind: OpenedInputKind,
     pub(crate) reader: InputReader,
     pub(crate) description: InputDescription,
+    #[cfg(all(unix, feature = "lessopen"))]
+    lessopen: Option<LessOpen>,
 }
 
 impl OpenedInput {
@@ -127,8 +135,18 @@ impl Input {
         }
     }
 
-    pub(crate) fn open(self, stdout_identifier: Option<&Identifier>) -> Result<OpenedInput> {
-        let description = self.description.clone();
+    pub(crate) fn open(
+        mut self,
+        stdout_identifier: Option<&Identifier>,
+        #[cfg(all(unix, feature = "lessopen"))] lessopen: bool,
+    ) -> Result<OpenedInput> {
+        #[cfg(all(unix, feature = "lessopen"))]
+        let lessopen = if lessopen {
+            LessOpen::new(&mut self)?
+        } else {
+            None
+        };
+        let description = self.description;
         match self.kind {
             InputKind::StdIn => {
                 if let Some(stdout) = stdout_identifier {
@@ -146,6 +164,8 @@ impl Input {
                     kind: OpenedInputKind::StdIn,
                     description,
                     reader: InputReader::new(io::stdin().lock()),
+                    #[cfg(all(unix, feature = "lessopen"))]
+                    lessopen,
                 })
             }
 
@@ -191,12 +211,16 @@ impl Input {
                     let r = InputReader::new(BufReader::new(file));
                     r
                 },
+                #[cfg(all(unix, feature = "lessopen"))]
+                lessopen,
             }),
             InputKind::CustomReader(reader) => Ok(OpenedInput {
                 #[cfg(feature = "git")]
                 kind: OpenedInputKind::CustomReader,
                 description,
                 reader: InputReader::new(BufReader::new(reader)),
+                #[cfg(all(unix, feature = "lessopen"))]
+                lessopen,
             }),
         }
     }

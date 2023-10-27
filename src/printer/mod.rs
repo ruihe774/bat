@@ -14,13 +14,13 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::assets::{HighlightingAssets, SyntaxReferenceInSet, SyntaxUndetected};
 use crate::config::Config;
+#[cfg(feature = "git")]
+use crate::controller::diff::LineChanges;
 use crate::controller::line_range::RangeCheckResult;
-#[cfg(feature = "git")]
-use crate::decorations::LineChangesDecoration;
-#[cfg(feature = "git")]
-use crate::diff::LineChanges;
 use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
+#[cfg(feature = "git")]
+use decorations::LineChangesDecoration;
 use decorations::{Decoration, GridBorderDecoration, LineNumberDecoration};
 use preprocessor::{expand_tabs, replace_nonprintable};
 use terminal::{as_terminal_escaped, to_ansi_color};

@@ -13,12 +13,12 @@ use clircle::{Clircle, Identifier};
 use memmap2::MmapOptions;
 
 use crate::error::*;
-#[cfg(all(unix, feature = "lessopen"))]
+#[cfg(feature = "lessopen")]
 use lessopen::LessOpen;
 #[cfg(feature = "zero-copy")]
 use zero_copy::{leak_mmap, LeakySliceReader};
 
-#[cfg(all(unix, feature = "lessopen"))]
+#[cfg(feature = "lessopen")]
 pub mod lessopen;
 #[cfg(feature = "zero-copy")]
 pub(crate) mod zero_copy;
@@ -100,7 +100,7 @@ pub(crate) struct OpenedInput {
     pub(crate) kind: OpenedInputKind,
     pub(crate) reader: InputReader,
     pub(crate) description: InputDescription,
-    #[cfg(all(unix, feature = "lessopen"))]
+    #[cfg(feature = "lessopen")]
     lessopen: Option<LessOpen>,
 }
 
@@ -138,9 +138,9 @@ impl Input {
     pub(crate) fn open(
         mut self,
         stdout_identifier: Option<&Identifier>,
-        #[cfg(all(unix, feature = "lessopen"))] lessopen: bool,
+        #[cfg(feature = "lessopen")] lessopen: bool,
     ) -> Result<OpenedInput> {
-        #[cfg(all(unix, feature = "lessopen"))]
+        #[cfg(feature = "lessopen")]
         let lessopen = if lessopen {
             LessOpen::new(&mut self)?
         } else {
@@ -164,7 +164,7 @@ impl Input {
                     kind: OpenedInputKind::StdIn,
                     description,
                     reader: InputReader::new(io::stdin().lock()),
-                    #[cfg(all(unix, feature = "lessopen"))]
+                    #[cfg(feature = "lessopen")]
                     lessopen,
                 })
             }
@@ -211,7 +211,7 @@ impl Input {
                     let r = InputReader::new(BufReader::new(file));
                     r
                 },
-                #[cfg(all(unix, feature = "lessopen"))]
+                #[cfg(feature = "lessopen")]
                 lessopen,
             }),
             InputKind::CustomReader(reader) => Ok(OpenedInput {
@@ -219,7 +219,7 @@ impl Input {
                 kind: OpenedInputKind::CustomReader,
                 description,
                 reader: InputReader::new(BufReader::new(reader)),
-                #[cfg(all(unix, feature = "lessopen"))]
+                #[cfg(feature = "lessopen")]
                 lessopen,
             }),
         }

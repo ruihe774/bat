@@ -150,7 +150,7 @@ impl<'b> Controller<'b> {
     ) -> Result<()> {
         let mut opened_input = input.open(
             stdout_identifier,
-            #[cfg(all(unix, feature = "lessopen"))]
+            #[cfg(feature = "lessopen")]
             self.config.use_lessopen,
         )?;
         #[cfg(feature = "git")]

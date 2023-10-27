@@ -52,7 +52,8 @@ paging = [
 
 # Support $LESSOPEN preprocessor
 lessopen = [
-    "run_script",
+    "shell-words",
+    "grep-cli",
 ]
 
 # Support guesslang
@@ -120,10 +121,6 @@ optional = true
 version = "1.8"
 optional = true
 
-[dependencies.run_script]
-version = "0.10"
-optional = true
-
 [dependencies.shell-words]
 version = "1.1"
 optional = true
@@ -139,7 +136,8 @@ optional = true
 [dependencies.bugreport]
 version = "0.5"
 optional = true
-features = ["format_plaintext"]
+default-features = false
+features = ["collector_operating_system", "git_hash", "format_plaintext"]
 
 [dependencies.clap]
 version = "4.4"

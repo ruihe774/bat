@@ -155,7 +155,6 @@ dependencies = [
  "git2",
  "globset",
  "grep-cli",
- "libc",
  "libmimalloc-sys",
  "memmap2",
  "ndarray",

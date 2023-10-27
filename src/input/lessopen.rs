@@ -1,6 +1,6 @@
 use std::env::{self, VarError};
 use std::error::Error as StdError;
-use std::ffi::{CStr, CString, OsStr};
+use std::ffi::OsStr;
 use std::fmt::{self, Display};
 use std::io::{self, IoSliceMut, Read};
 use std::mem;
@@ -10,7 +10,6 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use bstr::ByteSlice;
-use libc::snprintf;
 
 use super::{Input, InputKind};
 use crate::error::*;
@@ -31,7 +30,7 @@ impl StdError for PathNotUnicode {}
 #[derive(Debug)]
 pub(crate) struct LessOpen {
     child: Option<Child>,
-    close: Option<(String, String, String)>,
+    close: Vec<String>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -43,7 +42,7 @@ enum LessOpenKind {
 
 fn get_env_var(key: &str) -> Result<Option<String>> {
     match env::var(key) {
-        Ok(value) => Ok(Some(value)),
+        Ok(value) => Ok((!value.is_empty()).then_some(value)),
         Err(VarError::NotPresent) => Ok(None),
         Err(e @ VarError::NotUnicode(_)) => Err(e)
             .with_context(|| format!("the value of environment variable '{}' is not unicode", key)),
@@ -62,6 +61,26 @@ fn run_script(
         .stdout(stdout)
         .stderr(Stdio::inherit())
         .spawn()
+}
+
+fn make_lessclose(
+    mut lessclose: String,
+    file_name: &str,
+    replacement: &str,
+) -> std::result::Result<Vec<String>, shell_words::ParseError> {
+    let mut iter = lessclose.match_indices("%s").map(|(pos, _)| pos);
+    let first = iter.next();
+    let second = iter.next();
+    mem::drop(iter);
+    if let Some(pos) = first {
+        lessclose.replace_range(pos..(pos + 2), file_name);
+    }
+    if let Some(pos) = second {
+        debug_assert!(first.is_some());
+        let offset = file_name.len() - 2; // wrapping add
+        lessclose.replace_range((pos + offset)..(pos + offset + 2), replacement);
+    }
+    shell_words::split(lessclose.as_str())
 }
 
 impl LessOpen {
@@ -87,8 +106,6 @@ impl LessOpen {
                 (false, lessopen)
             };
 
-            let lessclose = get_env_var("LESSCLOSE")?;
-
             let file_name = match input.kind {
                 InputKind::StdIn => {
                     if process_stdin {
@@ -104,23 +121,12 @@ impl LessOpen {
                 }
                 InputKind::CustomReader(_) => return Ok(None), // maybe it needs a warning?
             };
-            let file_name_c = CString::new(file_name)?;
 
-            const BUFSIZE: usize = 1024;
-            let mut buf = [0; BUFSIZE];
-            let lessopen_c = CString::new(lessopen)?;
-            unsafe {
-                snprintf(
-                    mem::transmute(buf.as_mut_ptr()),
-                    BUFSIZE,
-                    lessopen_c.as_ptr(),
-                    file_name_c.as_ptr(),
-                )
-            };
-            let script = CStr::from_bytes_until_nul(buf.as_slice())?.to_str()?;
-            let file_name = file_name_c.into_string()?;
+            let lessopen = lessopen.replacen("%s", file_name, 1);
+            let lessclose = get_env_var("LESSCLOSE")?;
+            mem::drop(lessopen_s);
 
-            let all_args = shell_words::split(script)?;
+            let all_args = shell_words::split(lessopen.as_str())?;
             let (script, args) = all_args.split_first().unwrap();
 
             let mut child = run_script(
@@ -148,12 +154,13 @@ impl LessOpen {
                         } else {
                             let replacement = String::from_utf8(stdout)
                                 .context("path returned by lessopen preprocessor is not utf8")?;
-                            input.kind = InputKind::OrdinaryFile(replacement.clone().into());
-                            Some(LessOpen {
-                                child: None,
-                                close: lessclose
-                                    .map(|lessclose| (lessclose, file_name, replacement)),
-                            })
+                            let close = lessclose
+                                .map(|lessclose| {
+                                    make_lessclose(lessclose, file_name, replacement.as_str())
+                                })
+                                .unwrap_or(Ok(Vec::new()))?;
+                            input.kind = InputKind::OrdinaryFile(replacement.into());
+                            Some(LessOpen { child: None, close })
                         }
                     } else {
                         None
@@ -165,11 +172,13 @@ impl LessOpen {
                     if reader.peek().map(|byte| byte.is_none()).unwrap_or(true) {
                         None
                     } else {
+                        let close = lessclose
+                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"))
+                            .unwrap_or(Ok(Vec::new()))?;
                         input.kind = InputKind::CustomReader(Box::new(reader));
                         Some(LessOpen {
                             child: Some(child),
-                            close: lessclose
-                                .map(|lessclose| (lessclose, file_name, "-".to_owned())),
+                            close,
                         })
                     }
                 }
@@ -188,11 +197,13 @@ impl LessOpen {
                     {
                         None
                     } else {
+                        let close = lessclose
+                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"))
+                            .unwrap_or(Ok(Vec::new()))?;
                         input.kind = InputKind::CustomReader(Box::new(reader));
                         Some(LessOpen {
                             child: Some(child),
-                            close: lessclose
-                                .map(|lessclose| (lessclose, file_name, "-".to_owned())),
+                            close,
                         })
                     }
                 }
@@ -211,29 +222,8 @@ impl Drop for LessOpen {
         }
 
         // call lessclose
-        if let Some((lessclose, file_name, replacement)) = self.close.take() {
-            const BUFSIZE: usize = 1024;
-            let mut buf = [0; BUFSIZE];
-            let lessclose_c = CString::new(lessclose).unwrap();
-            let file_name_c = CString::new(file_name).unwrap();
-            let replacement_c = CString::new(replacement).unwrap();
-            unsafe {
-                snprintf(
-                    mem::transmute(buf.as_mut_ptr()),
-                    BUFSIZE,
-                    lessclose_c.as_ptr(),
-                    file_name_c.as_ptr(),
-                    replacement_c.as_ptr(),
-                )
-            };
-            let script = CStr::from_bytes_until_nul(buf.as_slice())
-                .unwrap()
-                .to_str()
-                .unwrap();
-
-            let all_args = shell_words::split(script).unwrap();
-            let (script, args) = all_args.split_first().unwrap();
-
+        if !self.close.is_empty() {
+            let (script, args) = self.close.split_first().unwrap();
             _ = run_script(script, args, Stdio::null(), Stdio::null())
                 .and_then(|mut child| child.wait())
         }

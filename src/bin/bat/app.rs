@@ -296,7 +296,7 @@ impl App {
                 .map(HighlightedLineRanges)
                 .unwrap_or_default(),
             #[cfg(feature = "lessopen")]
-            use_lessopen: self.matches.get_flag("lessopen"),
+            use_lessopen: !self.matches.get_flag("no-lessopen"),
         })
     }
 

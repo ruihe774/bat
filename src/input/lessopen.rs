@@ -57,6 +57,8 @@ fn run_script(
 ) -> io::Result<Child> {
     Command::new(script.as_ref())
         .args(args)
+        .env_remove("LESSOPEN")
+        .env_remove("LESSCLOSE")
         .stdin(stdin)
         .stdout(stdout)
         .stderr(Stdio::inherit())

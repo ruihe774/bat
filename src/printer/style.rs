@@ -42,7 +42,7 @@ struct StyleComponentWrapper(StyleComponent);
 
 impl PartialOrd for StyleComponentWrapper {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        (self.0 as u8).partial_cmp(&(other.0 as u8))
+        Some(self.cmp(other))
     }
 }
 
@@ -58,9 +58,9 @@ impl From<StyleComponent> for StyleComponentWrapper {
     }
 }
 
-impl Into<StyleComponent> for StyleComponentWrapper {
-    fn into(self) -> StyleComponent {
-        self.0
+impl From<StyleComponentWrapper> for StyleComponent {
+    fn from(value: StyleComponentWrapper) -> Self {
+        value.0
     }
 }
 

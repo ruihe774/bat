@@ -88,22 +88,22 @@ fn make_lessclose(
 impl LessOpen {
     pub fn new(input: &mut Input) -> Result<Option<LessOpen>> {
         if let Some(lessopen_s) = get_env_var("LESSOPEN")? {
-            let (kind, lessopen) = if lessopen_s.starts_with("||") {
+            let (kind, lessopen) = if let Some(lessopen) = lessopen_s.strip_prefix("||") {
                 // "||" means pipe directly to bat without making a temporary file
                 // Also, if preprocessor output is empty and exit code is zero, use the empty output
                 // Otherwise, if output is empty and exit code is nonzero, use original file contents
-                (LessOpenKind::Piped, &lessopen_s[2..])
-            } else if lessopen_s.starts_with('|') {
+                (LessOpenKind::Piped, lessopen)
+            } else if let Some(lessopen) = lessopen_s.strip_prefix('|') {
                 // "|" means pipe, but ignore exit code, always using preprocessor output if not empty
-                (LessOpenKind::PipedIgnoreExitCode, &lessopen_s[1..])
+                (LessOpenKind::PipedIgnoreExitCode, lessopen)
             } else {
                 // If neither appear, write output to a temporary file and read from that
                 (LessOpenKind::TempFile, lessopen_s.as_str())
             };
 
             // "-" means that stdin is preprocessed along with files and may appear alongside "|" and "||"
-            let (process_stdin, lessopen) = if lessopen.starts_with('-') {
-                (true, &lessopen[1..])
+            let (process_stdin, lessopen) = if let Some(lessopen) = lessopen.strip_prefix('-') {
+                (true, lessopen)
             } else {
                 (false, lessopen)
             };

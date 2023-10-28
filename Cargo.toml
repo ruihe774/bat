@@ -36,7 +36,6 @@ minimal-application = [
 # Support bugreport
 bugreport = [
     "dep:bugreport",
-    "anyhow/backtrace",
 ]
 
 # Support applying a pager on the output

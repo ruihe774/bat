@@ -12,13 +12,9 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::assets::{HighlightingAssets, SyntaxReferenceInSet, SyntaxUndetected};
 use crate::config::Config;
-#[cfg(feature = "git")]
-use crate::controller::diff::LineChanges;
 use crate::controller::line_range::RangeCheckResult;
 use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
-#[cfg(feature = "git")]
-use decorations::LineChangesDecoration;
 use decorations::{Decoration, GridBorderDecoration, LineNumberDecoration};
 use preprocessor::{expand_tabs, replace_nonprintable};
 use terminal::{as_terminal_escaped, to_ansi_color};
@@ -134,8 +130,6 @@ pub(crate) struct InteractivePrinter<'a> {
     panel_width: usize,
     ansi_style: AnsiStyle,
     content_type: Option<ContentType>,
-    #[cfg(feature = "git")]
-    pub line_changes: &'a Option<LineChanges>,
     highlighter_from_set: Option<HighlighterFromSet<'a>>,
     background_color_highlight: Option<Color>,
 }
@@ -145,7 +139,6 @@ impl<'a> InteractivePrinter<'a> {
         config: &'a Config,
         assets: &'a HighlightingAssets,
         input: &mut OpenedInput,
-        #[cfg(feature = "git")] line_changes: &'a Option<LineChanges>,
     ) -> Result<Self> {
         let theme = config.theme.as_ref().map_or_else(
             || Ok(assets.get_default_theme()),
@@ -165,13 +158,6 @@ impl<'a> InteractivePrinter<'a> {
 
         if config.style_components.numbers() {
             decorations.push(Box::new(LineNumberDecoration::new(&colors)));
-        }
-
-        #[cfg(feature = "git")]
-        {
-            if config.style_components.changes() {
-                decorations.push(Box::new(LineChangesDecoration::new(&colors)));
-            }
         }
 
         let mut panel_width: usize =
@@ -218,8 +204,6 @@ impl<'a> InteractivePrinter<'a> {
             decorations,
             content_type: input.reader.content_type.clone(),
             ansi_style: AnsiStyle::new(),
-            #[cfg(feature = "git")]
-            line_changes,
             highlighter_from_set,
             background_color_highlight,
         })
@@ -707,12 +691,6 @@ pub(crate) struct Colors {
     pub grid: Style,
     pub rule: Style,
     pub header_value: Style,
-    #[cfg(feature = "git")]
-    pub git_added: Style,
-    #[cfg(feature = "git")]
-    pub git_removed: Style,
-    #[cfg(feature = "git")]
-    pub git_modified: Style,
     pub line_number: Style,
 }
 
@@ -739,12 +717,6 @@ impl Colors {
             grid: gutter_style,
             rule: gutter_style,
             header_value: Style::new().bold(),
-            #[cfg(feature = "git")]
-            git_added: Green.normal(),
-            #[cfg(feature = "git")]
-            git_removed: Red.normal(),
-            #[cfg(feature = "git")]
-            git_modified: Yellow.normal(),
             line_number: gutter_style,
         }
     }

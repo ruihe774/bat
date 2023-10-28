@@ -259,26 +259,14 @@ impl App {
                     }
                 })
                 .unwrap_or(None),
-            visible_lines: match self.matches.try_contains_id("diff").unwrap_or_default()
-                && self.matches.get_flag("diff")
-            {
-                #[cfg(feature = "git")]
-                true => VisibleLines::DiffContext(
-                    self.matches
-                        .get_one::<String>("diff-context")
-                        .and_then(|t| t.parse().ok())
-                        .unwrap_or(2),
-                ),
-
-                _ => VisibleLines::Ranges(
+            visible_lines: VisibleLines(
                     self.matches
                         .get_many::<String>("line-range")
                         .map(|vs| vs.map(|s| LineRange::parse(s.as_str())).collect())
                         .transpose()?
                         .map(LineRanges::from)
-                        .unwrap_or_default(),
+                        .unwrap_or(LineRanges::all()),
                 ),
-            },
             style_components,
             syntax_mapping,
             pager: self.matches.get_one::<String>("pager").map(|s| s.as_str()),

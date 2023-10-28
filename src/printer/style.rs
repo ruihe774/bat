@@ -24,8 +24,6 @@ impl StdError for UnknownStyle {}
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StyleComponent {
     Auto,
-    #[cfg(feature = "git")]
-    Changes,
     Grid,
     Rule,
     Header,
@@ -74,8 +72,6 @@ impl StyleComponent {
                     StyleComponent::Plain.components(interactive_terminal)
                 }
             }
-            #[cfg(feature = "git")]
-            StyleComponent::Changes => &[StyleComponent::Changes],
             StyleComponent::Grid => &[StyleComponent::Grid],
             StyleComponent::Rule => &[StyleComponent::Rule],
             StyleComponent::Header => &[StyleComponent::HeaderFilename],
@@ -83,8 +79,6 @@ impl StyleComponent {
             StyleComponent::LineNumbers => &[StyleComponent::LineNumbers],
             StyleComponent::Snip => &[StyleComponent::Snip],
             StyleComponent::Full => &[
-                #[cfg(feature = "git")]
-                StyleComponent::Changes,
                 StyleComponent::Grid,
                 StyleComponent::HeaderFilename,
                 StyleComponent::LineNumbers,
@@ -101,8 +95,6 @@ impl FromStr for StyleComponent {
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "auto" => Ok(StyleComponent::Auto),
-            #[cfg(feature = "git")]
-            "changes" => Ok(StyleComponent::Changes),
             "grid" => Ok(StyleComponent::Grid),
             "rule" => Ok(StyleComponent::Rule),
             "header" => Ok(StyleComponent::Header),
@@ -134,11 +126,6 @@ impl StyleComponents {
             "cannot specify style components 'grid' and 'rule' together"
         );
         StyleComponents(set)
-    }
-
-    #[cfg(feature = "git")]
-    pub fn changes(&self) -> bool {
-        self.0.contains(&StyleComponent::Changes.into())
     }
 
     pub fn grid(&self) -> bool {

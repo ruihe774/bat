@@ -87,17 +87,8 @@ pub struct Input {
     pub description: InputDescription,
 }
 
-#[cfg(feature = "git")]
-pub(crate) enum OpenedInputKind {
-    OrdinaryFile(PathBuf),
-    StdIn,
-    CustomReader,
-}
-
 #[allow(dead_code)]
 pub(crate) struct OpenedInput {
-    #[cfg(feature = "git")]
-    pub(crate) kind: OpenedInputKind,
     pub(crate) reader: InputReader,
     pub(crate) description: InputDescription,
     #[cfg(feature = "lessopen")]
@@ -160,8 +151,6 @@ impl Input {
                 }
 
                 Ok(OpenedInput {
-                    #[cfg(feature = "git")]
-                    kind: OpenedInputKind::StdIn,
                     description,
                     reader: InputReader::new(io::stdin().lock()),
                     #[cfg(feature = "lessopen")]
@@ -170,8 +159,6 @@ impl Input {
             }
 
             InputKind::OrdinaryFile(path) => Ok(OpenedInput {
-                #[cfg(feature = "git")]
-                kind: OpenedInputKind::OrdinaryFile(path.clone()),
                 description,
                 reader: {
                     let mut file = File::open(&path)
@@ -215,8 +202,6 @@ impl Input {
                 lessopen,
             }),
             InputKind::CustomReader(reader) => Ok(OpenedInput {
-                #[cfg(feature = "git")]
-                kind: OpenedInputKind::CustomReader,
                 description,
                 reader: InputReader::new(BufReader::new(reader)),
                 #[cfg(feature = "lessopen")]

@@ -170,12 +170,6 @@ impl LineRanges {
     }
 }
 
-impl Default for LineRanges {
-    fn default() -> Self {
-        Self::all()
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct HighlightedLineRanges(pub LineRanges);

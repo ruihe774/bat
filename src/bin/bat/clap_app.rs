@@ -131,41 +131,6 @@ pub fn build_app(interactive_output: bool) -> Command {
                 ),
         );
 
-    #[cfg(feature = "git")]
-    {
-        app = app
-                .arg(
-                    Arg::new("diff")
-                        .long("diff")
-                        .short('d')
-                        .action(ArgAction::SetTrue)
-                        .conflicts_with("line-range")
-                        .help("Only show lines that have been added/removed/modified.")
-                        .long_help(
-                            "Only show lines that have been added/removed/modified with respect \
-                     to the Git index. Use --diff-context=N to control how much context you want to see.",
-                        ),
-                )
-                .arg(
-                    Arg::new("diff-context")
-                        .long("diff-context")
-                        .overrides_with("diff-context")
-                        .value_name("N")
-                        .value_parser(
-                            |n: &str| {
-                                n.parse::<usize>()
-                                    .map_err(|_| "must be a number")
-                                    .map(|_| n.to_owned()) // Convert to Result<String, &str>
-                                    .map_err(|e| e.to_string())
-                            }, // Convert to Result<(), String>
-                        )
-                        .hide_short_help(true)
-                        .long_help(
-                            "Include N lines of context around added/removed/modified lines when using '--diff'.",
-                        ),
-                )
-    }
-
     app = app.arg(
         Arg::new("tabs")
             .long("tabs")
@@ -405,8 +370,6 @@ pub fn build_app(interactive_output: bool) -> Command {
                             "rule",
                             "numbers",
                             "snip",
-                            #[cfg(feature = "git")]
-                            "changes",
                         ].contains(style)
                     });
 

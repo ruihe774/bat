@@ -39,11 +39,6 @@ bugreport = [
     "anyhow/backtrace",
 ]
 
-# Support indicating git modifications
-git = [
-    "git2",
-]
-
 # Support applying a pager on the output
 paging = [
     "shell-words",
@@ -148,11 +143,6 @@ features = ["wrap_help", "cargo"]
 version = "0.1"
 optional = true
 features = ["extended"]
-
-[dependencies.git2]
-version = "0.18"
-optional = true
-default-features = false
 
 [dependencies.syntect]
 git = "https://github.com/ruihe774/syntect.git"

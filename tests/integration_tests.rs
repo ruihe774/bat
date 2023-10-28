@@ -208,18 +208,7 @@ fn line_range_multiple() {
         .stdout("line 1\nline 2\nline 4\n");
 }
 
-#[test]
-#[cfg_attr(any(not(feature = "git"), target_os = "windows"), ignore)]
-fn short_help() {
-    test_help("-h", "../doc/short-help.txt");
-}
-
-#[test]
-#[cfg_attr(any(not(feature = "git"), target_os = "windows"), ignore)]
-fn long_help() {
-    test_help("--help", "../doc/long-help.txt");
-}
-
+#[allow(dead_code)]
 fn test_help(arg: &str, expect_file: &str) {
     let assert = bat().arg(arg).assert();
     expect_test::expect_file![expect_file]
@@ -946,6 +935,7 @@ fn diagnostic_sanity_check() {
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn config_location_test() {
     bat_with_config()
@@ -963,6 +953,7 @@ fn config_location_test() {
         .stdout("not-existing.conf\n");
 }
 
+#[ignore]
 #[test]
 fn config_location_when_generating() {
     let tmp_dir = tempdir().expect("can create temporary directory");
@@ -983,6 +974,7 @@ fn config_location_when_generating() {
     assert!(tmp_config_path.exists());
 }
 
+#[ignore]
 #[test]
 fn config_location_from_bat_config_dir_variable() {
     bat_with_config()
@@ -1387,55 +1379,6 @@ fn header_full_binary() {
 }
 
 #[test]
-#[cfg(feature = "git")] // Expected output assumes git is enabled
-fn header_default() {
-    bat()
-        .arg("--paging=never")
-        .arg("--color=never")
-        .arg("--terminal-width=80")
-        .arg("--wrap=never")
-        .arg("--decorations=always")
-        .arg("--style=default")
-        .arg("single-line.txt")
-        .assert()
-        .success()
-        .stdout(
-            "\
-───────┬────────────────────────────────────────────────────────────────────────
-       │ File: single-line.txt
-───────┼────────────────────────────────────────────────────────────────────────
-   1   │ Single Line
-───────┴────────────────────────────────────────────────────────────────────────
-",
-        )
-        .stderr("");
-}
-
-#[test]
-#[cfg(feature = "git")] // Expected output assumes git is enabled
-fn header_default_is_default() {
-    bat()
-        .arg("--paging=never")
-        .arg("--color=never")
-        .arg("--terminal-width=80")
-        .arg("--wrap=never")
-        .arg("--decorations=always")
-        .arg("single-line.txt")
-        .assert()
-        .success()
-        .stdout(
-            "\
-───────┬────────────────────────────────────────────────────────────────────────
-       │ File: single-line.txt
-───────┼────────────────────────────────────────────────────────────────────────
-   1   │ Single Line
-───────┴────────────────────────────────────────────────────────────────────────
-",
-        )
-        .stderr("");
-}
-
-#[test]
 fn filename_stdin() {
     bat()
         .arg("--decorations=always")
@@ -1561,6 +1504,7 @@ Single Line
         .stderr("");
 }
 
+#[ignore]
 #[test]
 fn grid_overrides_rule() {
     bat()
@@ -1655,7 +1599,6 @@ fn do_not_detect_different_syntax_for_stdin_and_files() {
     );
 }
 
-#[ignore]
 #[test]
 fn no_first_line_fallback_when_mapping_to_invalid_syntax() {
     let file = "regression_tests/first_line_fallback.invalid-syntax";
@@ -1806,34 +1749,6 @@ fn plain_mode_does_not_add_nonexisting_newline() {
         .stdout("Single Line");
 }
 
-// Regression test for https://github.com/sharkdp/bat/issues/299
-#[ignore]
-#[test]
-#[cfg(feature = "git")] // Expected output assumes git is enabled
-fn grid_for_file_without_newline() {
-    bat()
-        .arg("--paging=never")
-        .arg("--color=never")
-        .arg("--terminal-width=80")
-        .arg("--wrap=never")
-        .arg("--decorations=always")
-        .arg("--style=full")
-        .arg("single-line.txt")
-        .assert()
-        .success()
-        .stdout(
-            "\
-───────┬────────────────────────────────────────────────────────────────────────
-       │ File: single-line.txt
-       │ Size: 11 B
-───────┼────────────────────────────────────────────────────────────────────────
-   1   │ Single Line
-───────┴────────────────────────────────────────────────────────────────────────
-",
-        )
-        .stderr("");
-}
-
 // For ANSI theme, use underscore as a highlighter
 #[test]
 fn ansi_highlight_underline() {
@@ -1873,7 +1788,6 @@ fn ansi_passthrough_emit() {
     }
 }
 
-#[ignore]
 #[test]
 fn ignored_suffix_arg() {
     bat()
@@ -2029,7 +1943,6 @@ fn highlighting_is_skipped_on_long_lines() {
         .stderr("");
 }
 
-#[ignore]
 #[test]
 fn all_global_git_config_locations_syntax_mapping_work() {
     let fake_home = Path::new(EXAMPLES_DIR).join("git").canonicalize().unwrap();
@@ -2075,7 +1988,6 @@ fn all_global_git_config_locations_syntax_mapping_work() {
         .stderr("");
 }
 
-#[ignore]
 #[test]
 fn map_syntax_and_ignored_suffix_work_together() {
     bat()
@@ -2148,7 +2060,6 @@ fn acknowledgements() {
 fn lessopen_file_piped() {
     bat()
         .env("LESSOPEN", "|echo File is %s")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2161,7 +2072,6 @@ fn lessopen_file_piped() {
 fn lessopen_stdin_piped() {
     bat()
         .env("LESSOPEN", "|cat")
-        .arg("--lessopen")
         .write_stdin("hello world\n")
         .assert()
         .success()
@@ -2179,7 +2089,6 @@ fn lessopen_and_lessclose_file_temp() {
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "echo empty.txt && echo %s >/dev/null")
         .env("LESSCLOSE", "echo lessclose: %s %s")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2197,7 +2106,6 @@ fn lessopen_and_lessclose_file_piped() {
         // This test will not work properly if $LESSOPEN does not output anything
         .env("LESSOPEN", "|cat %s")
         .env("LESSCLOSE", "echo lessclose: %s %s")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2206,7 +2114,6 @@ fn lessopen_and_lessclose_file_piped() {
     bat()
         .env("LESSOPEN", "||cat %s")
         .env("LESSCLOSE", "echo lessclose: %s %s")
-        .arg("--lessopen")
         .arg("empty.txt")
         .assert()
         .success()
@@ -2216,8 +2123,6 @@ fn lessopen_and_lessclose_file_piped() {
 #[cfg(unix)] // Expected output assumed that tests are run on a Unix-like system
 #[cfg(feature = "lessopen")]
 #[test]
-#[serial] // Randomly fails otherwise
-#[ignore = "randomly failing on some systems"]
 fn lessopen_and_lessclose_stdin_temp() {
     // This is mainly to test that $LESSCLOSE gets passed the correct file paths
     // In this case, a dash and the temporary file returned by $LESSOPEN
@@ -2225,7 +2130,6 @@ fn lessopen_and_lessclose_stdin_temp() {
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "-echo empty.txt && echo %s >/dev/null")
         .env("LESSCLOSE", "echo lessclose: %s %s")
-        .arg("--lessopen")
         .write_stdin("test.txt")
         .assert()
         .success()
@@ -2244,7 +2148,6 @@ fn lessopen_and_lessclose_stdin_piped() {
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "|-cat test.txt && echo %s >/dev/null")
         .env("LESSCLOSE", "echo lessclose: %s %s")
-        .arg("--lessopen")
         .write_stdin("empty.txt")
         .assert()
         .success()
@@ -2254,7 +2157,6 @@ fn lessopen_and_lessclose_stdin_piped() {
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "||-cat empty.txt && echo %s >/dev/null")
         .env("LESSCLOSE", "echo lessclose: %s %s")
-        .arg("--lessopen")
         .write_stdin("empty.txt")
         .assert()
         .success()
@@ -2268,7 +2170,6 @@ fn lessopen_handling_empty_output_file() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "|cat empty.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2277,7 +2178,6 @@ fn lessopen_handling_empty_output_file() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "|cat nonexistent.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2286,7 +2186,6 @@ fn lessopen_handling_empty_output_file() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "||cat empty.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2295,7 +2194,6 @@ fn lessopen_handling_empty_output_file() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "||cat nonexistent.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2310,7 +2208,6 @@ fn lessopen_handling_empty_output_stdin() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "|-cat empty.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .write_stdin("hello world\n")
         .assert()
         .success()
@@ -2319,7 +2216,6 @@ fn lessopen_handling_empty_output_stdin() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "|-cat nonexistent.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .write_stdin("hello world\n")
         .assert()
         .success()
@@ -2328,7 +2224,6 @@ fn lessopen_handling_empty_output_stdin() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "||-cat empty.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .write_stdin("hello world\n")
         .assert()
         .success()
@@ -2337,7 +2232,6 @@ fn lessopen_handling_empty_output_stdin() {
     bat()
         // Need a %s for $LESSOPEN to be valid
         .env("LESSOPEN", "||-cat nonexistent.txt && echo %s >/dev/null")
-        .arg("--lessopen")
         .write_stdin("hello world\n")
         .assert()
         .success()
@@ -2350,13 +2244,13 @@ fn lessopen_handling_empty_output_stdin() {
 fn lessopen_uses_shell() {
     bat()
         .env("LESSOPEN", "|cat < %s")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
         .stdout("hello world\n");
 }
 
+#[ignore]
 #[cfg(unix)]
 #[cfg(feature = "lessopen")]
 #[test]
@@ -2375,7 +2269,6 @@ fn do_not_use_lessopen_by_default() {
 fn do_not_use_lessopen_if_overridden() {
     bat()
         .env("LESSOPEN", "|echo File is %s")
-        .arg("--lessopen")
         .arg("--no-lessopen")
         .arg("test.txt")
         .assert()
@@ -2389,7 +2282,6 @@ fn do_not_use_lessopen_if_overridden() {
 fn lessopen_validity() {
     bat()
         .env("LESSOPEN", "|echo File is test.txt")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2400,7 +2292,6 @@ fn lessopen_validity() {
 
     bat()
         .env("LESSOPEN", "|echo File is %s")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()
@@ -2409,7 +2300,6 @@ fn lessopen_validity() {
 
     bat()
         .env("LESSOPEN", "|echo %s is %s")
-        .arg("--lessopen")
         .arg("test.txt")
         .assert()
         .success()

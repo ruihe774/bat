@@ -1,14 +1,10 @@
 use std::env;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use tempfile::TempDir;
-
-use git2::build::CheckoutBuilder;
-use git2::Repository;
-use git2::Signature;
 
 pub struct BatTester {
     /// Temporary working directory
@@ -51,7 +47,7 @@ impl BatTester {
 
 impl Default for BatTester {
     fn default() -> Self {
-        let temp_dir = create_sample_directory().expect("sample directory");
+        let temp_dir = TempDir::new().expect("Temp directory");
 
         let root = env::current_exe()
             .expect("tests executable")
@@ -66,37 +62,4 @@ impl Default for BatTester {
 
         BatTester { temp_dir, exe }
     }
-}
-
-fn create_sample_directory() -> Result<TempDir, git2::Error> {
-    // Create temp directory and initialize repository
-    let temp_dir = TempDir::new().expect("Temp directory");
-    let repo = Repository::init(&temp_dir)?;
-
-    // Copy over `sample.rs`
-    let sample_path = temp_dir.path().join("sample.rs");
-    println!("{:?}", &sample_path);
-    fs::copy("tests/snapshots/sample.rs", &sample_path).expect("successful copy");
-
-    // Commit
-    let mut index = repo.index()?;
-    index.add_path(Path::new("sample.rs"))?;
-
-    let oid = index.write_tree()?;
-    let signature = Signature::now("bat test runner", "bat@test.runner")?;
-    let tree = repo.find_tree(oid)?;
-    let _ = repo.commit(
-        Some("HEAD"), //  point HEAD to our new commit
-        &signature,   // author
-        &signature,   // committer
-        "initial commit",
-        &tree,
-        &[],
-    );
-    let mut opts = CheckoutBuilder::new();
-    repo.checkout_head(Some(opts.force()))?;
-
-    fs::copy("tests/snapshots/sample.modified.rs", &sample_path).expect("successful copy");
-
-    Ok(temp_dir)
 }

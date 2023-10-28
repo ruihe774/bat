@@ -13,39 +13,17 @@ use crate::input::{Input, InputReader, OpenedInput};
 use crate::output::pager::PagingMode;
 use crate::output::OutputType;
 use crate::printer::{InteractivePrinter, OutputHandle, Printer, SimplePrinter};
-#[cfg(feature = "git")]
-use diff::{get_git_diff, LineChanges};
-#[cfg(feature = "git")]
-use line_range::LineRange;
 use line_range::{LineRanges, RangeCheckResult};
 
-#[cfg(feature = "git")]
-mod diff;
 pub mod line_range;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum VisibleLines {
-    /// Show all lines which are included in the line ranges
-    Ranges(LineRanges),
-
-    #[cfg(feature = "git")]
-    /// Only show lines surrounding added/deleted/modified lines
-    DiffContext(usize),
-}
-
-impl VisibleLines {
-    pub fn diff_mode(&self) -> bool {
-        match self {
-            Self::Ranges(_) => false,
-            #[cfg(feature = "git")]
-            Self::DiffContext(_) => true,
-        }
-    }
-}
+#[serde(transparent)]
+pub struct VisibleLines(pub LineRanges);
 
 impl Default for VisibleLines {
     fn default() -> Self {
-        VisibleLines::Ranges(LineRanges::default())
+        VisibleLines(LineRanges::all())
     }
 }
 
@@ -158,35 +136,6 @@ impl<'a> Controller<'a> {
             #[cfg(feature = "lessopen")]
             self.config.use_lessopen,
         )?;
-        #[cfg(feature = "git")]
-        let line_changes = if self.config.visible_lines.diff_mode()
-            || (!self.config.loop_through && self.config.style_components.changes())
-        {
-            match opened_input.kind {
-                crate::input::OpenedInputKind::OrdinaryFile(ref path) => {
-                    let diff = get_git_diff(path);
-
-                    // Skip files without Git modifications
-                    if self.config.visible_lines.diff_mode()
-                        && diff
-                            .as_ref()
-                            .map(|changes| changes.is_empty())
-                            .unwrap_or(false)
-                    {
-                        return Ok(());
-                    }
-
-                    diff
-                }
-                _ if self.config.visible_lines.diff_mode() => {
-                    // Skip non-file inputs in diff mode
-                    return Ok(());
-                }
-                _ => None,
-            }
-        } else {
-            None
-        };
 
         if self.config.loop_through {
             let mut printer = SimplePrinter::new(self.config);
@@ -195,24 +144,18 @@ impl<'a> Controller<'a> {
                 writer,
                 &mut opened_input,
                 !is_first,
-                #[cfg(feature = "git")]
-                &line_changes,
             )
         } else {
             let mut printer = InteractivePrinter::new(
                 self.config,
                 self.assets,
                 &mut opened_input,
-                #[cfg(feature = "git")]
-                &line_changes,
             )?;
             self.print_file(
                 &mut printer,
                 writer,
                 &mut opened_input,
                 !is_first,
-                #[cfg(feature = "git")]
-                &line_changes,
             )
         }
     }
@@ -223,30 +166,13 @@ impl<'a> Controller<'a> {
         writer: OutputHandle,
         input: &mut OpenedInput,
         add_header_padding: bool,
-        #[cfg(feature = "git")] line_changes: &Option<LineChanges>,
     ) -> Result<()> {
         if input.reader.content_type.is_some() || self.config.style_components.header() {
             printer.print_header(writer, input, add_header_padding)?;
         }
 
         if input.reader.content_type.is_some() {
-            let line_ranges = match self.config.visible_lines {
-                VisibleLines::Ranges(ref line_ranges) => line_ranges.clone(),
-                #[cfg(feature = "git")]
-                VisibleLines::DiffContext(context) => {
-                    let mut line_ranges: Vec<LineRange> = vec![];
-
-                    if let Some(line_changes) = line_changes {
-                        for &line in line_changes.keys() {
-                            let line = line as usize;
-                            line_ranges
-                                .push(LineRange::new(line.saturating_sub(context), line + context));
-                        }
-                    }
-
-                    LineRanges::from(line_ranges)
-                }
-            };
+            let line_ranges = self.config.visible_lines.0.clone();
 
             self.print_file_ranges(printer, writer, &mut input.reader, &line_ranges)?;
         }

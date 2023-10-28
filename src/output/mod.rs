@@ -127,11 +127,11 @@ impl OutputType {
                 if less_version >= 600 {
                     let mut col_header = 0;
                     let have_numbers = config.style_components.numbers();
-    
+
                     if have_numbers && panel_width > 0 {
                         col_header += panel_width;
                     }
-    
+
                     if col_header > 0 {
                         p.arg("--header");
                         p.arg(format!("0,{col_header}"));

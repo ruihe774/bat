@@ -1,7 +1,11 @@
+use std::fmt::Display;
+use std::io;
+
 use nu_ansi_term::Color::{self, Fixed, Rgb};
 use nu_ansi_term::{self, Style};
-
 use syntect::highlighting::{self, FontStyle};
+
+use super::OutputHandle;
 
 pub fn to_ansi_color(color: highlighting::Color, true_color: bool) -> Option<nu_ansi_term::Color> {
     if color.a == 0 {
@@ -46,16 +50,18 @@ pub fn to_ansi_color(color: highlighting::Color, true_color: bool) -> Option<nu_
     }
 }
 
-pub fn as_terminal_escaped(
+pub fn print_terminal_escaped(
     style: highlighting::Style,
     text: &str,
+    prefix: impl Display,
     true_color: bool,
     colored: bool,
     italics: bool,
     background_color: Option<highlighting::Color>,
-) -> String {
+    handle: OutputHandle,
+) -> io::Result<()> {
     if text.is_empty() {
-        return text.to_string();
+        return Ok(());
     }
 
     let mut style = if !colored {
@@ -78,5 +84,15 @@ pub fn as_terminal_escaped(
     };
 
     style.background = background_color.and_then(|c| to_ansi_color(c, true_color));
-    style.paint(text).to_string()
+
+    write!(
+        handle,
+        "{}{}{}{}",
+        style.prefix(),
+        prefix,
+        text,
+        style.suffix()
+    )?;
+
+    Ok(())
 }

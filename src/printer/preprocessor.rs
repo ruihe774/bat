@@ -1,7 +1,7 @@
+use std::borrow::Cow;
 use std::fmt::Write;
 
 use bstr::ByteSlice;
-use console::AnsiCodeIterator;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,37 +13,33 @@ pub enum NonprintableNotation {
     Unicode,
 }
 
-/// Expand tabs like an ANSI-enabled expand(1).
-pub(crate) fn expand_tabs(line: &str, width: usize, cursor: &mut usize) -> String {
-    let mut buffer = String::with_capacity(line.len() * 2);
+/// Expand tabs
+pub(crate) fn expand_tabs<'a>(mut text: &'a str, width: usize, cursor: &mut usize) -> Cow<'a, str> {
+    let mut buffer = String::new();
 
-    for chunk in AnsiCodeIterator::new(line) {
-        match chunk {
-            (text, true) => buffer.push_str(text),
-            (mut text, false) => {
-                while let Some(index) = text.find('\t') {
-                    // Add previous text.
-                    if index > 0 {
-                        *cursor += index;
-                        buffer.push_str(&text[0..index]);
-                    }
-
-                    // Add tab.
-                    let spaces = width - (*cursor % width);
-                    *cursor += spaces;
-                    buffer.push_str(&" ".repeat(spaces));
-
-                    // Next.
-                    text = &text[index + 1..text.len()];
-                }
-
-                *cursor += text.len();
-                buffer.push_str(text);
-            }
+    while let Some(index) = text.find('\t') {
+        // Add previous text.
+        if index != 0 {
+            *cursor += index;
+            buffer.push_str(&text[..index]);
         }
+
+        // Add tab.
+        let spaces = width - (*cursor % width);
+        *cursor += spaces;
+        buffer.extend([' '].into_iter().cycle().take(spaces));
+
+        // Next.
+        text = &text[index + 1..];
     }
 
-    buffer
+    *cursor += text.len();
+    if buffer.is_empty() {
+        text.into()
+    } else {
+        buffer.push_str(text);
+        buffer.into()
+    }
 }
 
 pub(crate) fn replace_nonprintable(

@@ -18,7 +18,7 @@ use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
 use decorations::{Decoration, GridBorderDecoration, LineNumberDecoration};
 use preprocessor::{expand_tabs, replace_nonprintable};
-use terminal::{print_terminal_escaped, to_ansi_color};
+use terminal::{to_ansi_color, to_ansi_style};
 use vscreen::AnsiStyle;
 
 mod decorations;
@@ -541,16 +541,23 @@ impl<'a> Printer for InteractivePrinter<'a> {
                             let text = text_cow.as_ref();
                             let text_trimmed = text.trim_end_matches(|c| c == '\r' || c == '\n');
 
-                            print_terminal_escaped(
-                                style,
-                                text_trimmed,
-                                &self.ansi_style,
-                                true_color,
-                                colored_output,
-                                italics,
-                                background_color,
-                                handle,
-                            )?;
+                            if !text_trimmed.is_empty() {
+                                let style = to_ansi_style(
+                                    style,
+                                    true_color,
+                                    colored_output,
+                                    italics,
+                                    background_color,
+                                );
+                                write!(
+                                    handle,
+                                    "{}{}{}{}",
+                                    style.prefix(),
+                                    &self.ansi_style,
+                                    text_trimmed,
+                                    style.suffix()
+                                )?;
+                            }
 
                             if text.len() != text_trimmed.len() {
                                 if let Some(background_color) = background_color {
@@ -598,12 +605,16 @@ impl<'a> Printer for InteractivePrinter<'a> {
                             );
 
                             let mut max_width = cursor_max - cursor;
-
-                            // line buffer (avoid calling write! for every character)
-                            let mut line_buf = String::with_capacity(max_width * 4);
-
-                            // Displayed width of line_buf
                             let mut current_width = 0;
+
+                            let style = to_ansi_style(
+                                style,
+                                true_color,
+                                colored_output,
+                                italics,
+                                background_color,
+                            );
+                            write!(handle, "{}{}", style.prefix(), &self.ansi_style)?;
 
                             for c in text.chars() {
                                 // calculate the displayed width for next character
@@ -614,17 +625,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
                                 // flush the buffer.
                                 if current_width > max_width {
                                     // It wraps.
-                                    print_terminal_escaped(
-                                        style,
-                                        line_buf.as_str(),
-                                        &self.ansi_style,
-                                        true_color,
-                                        colored_output,
-                                        italics,
-                                        background_color,
-                                        handle,
-                                    )?;
-                                    writeln!(handle)?;
+                                    writeln!(handle, "{}", style.suffix())?;
 
                                     if self.panel_width > 0 {
                                         for d in self.decorations.iter_mut().map(|d| d.as_mut()) {
@@ -633,28 +634,19 @@ impl<'a> Printer for InteractivePrinter<'a> {
                                         }
                                     }
 
+                                    write!(handle, "{}{}", style.prefix(), &self.ansi_style)?;
+
                                     cursor = 0;
                                     max_width = cursor_max;
-
-                                    line_buf.clear();
                                     current_width = cw;
                                 }
 
-                                line_buf.push(c);
+                                write!(handle, "{}", c)?;
                             }
 
                             // flush the buffer
                             cursor += current_width;
-                            print_terminal_escaped(
-                                style,
-                                line_buf.as_str(),
-                                &self.ansi_style,
-                                true_color,
-                                colored_output,
-                                italics,
-                                background_color,
-                                handle,
-                            )?;
+                            write!(handle, "{}", style.suffix())?;
                         }
                     }
                 }

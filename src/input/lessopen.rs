@@ -1,4 +1,3 @@
-use std::env::{self, VarError};
 use std::error::Error as StdError;
 use std::fmt::{self, Display};
 use std::io::{self, IoSliceMut, Read};
@@ -11,6 +10,7 @@ use std::time::Duration;
 use bstr::ByteSlice;
 
 use super::{Input, InputKind};
+use crate::config::get_env_var;
 use crate::error::*;
 
 #[derive(Debug)]
@@ -37,15 +37,6 @@ enum LessOpenKind {
     Piped,
     PipedIgnoreExitCode,
     TempFile,
-}
-
-fn get_env_var(key: &str) -> Result<Option<String>> {
-    match env::var(key) {
-        Ok(value) => Ok((!value.is_empty()).then_some(value)),
-        Err(VarError::NotPresent) => Ok(None),
-        Err(e @ VarError::NotUnicode(_)) => Err(e)
-            .with_context(|| format!("the value of environment variable '{}' is not unicode", key)),
-    }
 }
 
 #[cfg(unix)]

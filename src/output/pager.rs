@@ -3,6 +3,7 @@ use std::env;
 use serde::{Deserialize, Serialize};
 
 use crate::error::*;
+use crate::config::get_env_var;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PagingMode {
@@ -62,7 +63,7 @@ impl PagerKind {
             .map(|s| Path::new(&s).file_stem() == pager_bin)
             .unwrap_or(false);
 
-        match pager_bin.map(|s| s.to_string_lossy()).as_deref() {
+        match pager_bin.and_then(|s| s.to_str()) {
             Some("less") => PagerKind::Less,
             Some("more") => PagerKind::More,
             Some("most") => PagerKind::Most,
@@ -101,13 +102,13 @@ impl Pager {
 
 /// Returns what pager to use, after looking at both config and environment variables.
 pub(crate) fn get_pager(config_pager: Option<&str>) -> Result<Option<Pager>> {
-    let bat_pager = env::var("BAT_PAGER");
-    let pager = env::var("PAGER");
+    let bat_pager = get_env_var("BAT_PAGER")?;
+    let pager = get_env_var("PAGER")?;
 
     let (cmd, source) = match (config_pager, &bat_pager, &pager) {
         (Some(config_pager), _, _) => (config_pager, PagerSource::Config),
-        (_, Ok(bat_pager), _) => (bat_pager.as_str(), PagerSource::EnvVarBatPager),
-        (_, _, Ok(pager)) => (pager.as_str(), PagerSource::EnvVarPager),
+        (_, Some(bat_pager), _) => (bat_pager.as_str(), PagerSource::EnvVarBatPager),
+        (_, _, Some(pager)) => (pager.as_str(), PagerSource::EnvVarPager),
         _ => ("less", PagerSource::Default),
     };
 

@@ -1,8 +1,11 @@
+use std::env::{VarError, self};
+
 use serde::{Deserialize, Serialize};
 
 use crate::assets::syntax_mapping::SyntaxMapping;
 use crate::controller::line_range::HighlightedLineRanges;
 use crate::controller::VisibleLines;
+use crate::error::*;
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
 use crate::printer::preprocessor::NonprintableNotation;
@@ -77,6 +80,15 @@ pub struct Config<'a> {
 
 fn default_true() -> bool {
     true
+}
+
+pub(crate) fn get_env_var(key: &str) -> Result<Option<String>> {
+    match env::var(key) {
+        Ok(value) => Ok((!value.is_empty()).then_some(value)),
+        Err(VarError::NotPresent) => Ok(None),
+        Err(e @ VarError::NotUnicode(_)) => Err(e)
+            .with_context(|| format!("the value of environment variable '{}' is not unicode", key)),
+    }
 }
 
 #[cfg(all(feature = "minimal-application", feature = "paging"))]

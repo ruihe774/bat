@@ -12,6 +12,7 @@ use std::path::Path;
 use std::process;
 
 use bat::assets::HighlightingAssets;
+use bat::controller::default_error_handler;
 use nu_ansi_term::Color::Green;
 use nu_ansi_term::Style;
 

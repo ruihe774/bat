@@ -1,6 +1,4 @@
-use std::fmt::{self, Write};
-use std::io;
-use std::vec::Vec;
+use std::io::Write;
 
 use console::AnsiCodeIterator;
 use nu_ansi_term::Color::{Fixed, Yellow};
@@ -45,35 +43,23 @@ impl Default for WrappingMode {
     }
 }
 
-pub(crate) enum OutputHandle<'a> {
-    IoWrite(&'a mut dyn io::Write),
-    FmtWrite(&'a mut dyn fmt::Write),
-}
-
-impl<'a> OutputHandle<'a> {
-    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> Result<()> {
-        match self {
-            Self::IoWrite(handle) => handle.write_fmt(args).map_err(Into::into),
-            Self::FmtWrite(handle) => handle.write_fmt(args).map_err(Into::into),
-        }
-    }
-}
+pub(crate) type OutputHandle<'a> = &'a mut dyn Write;
 
 pub(crate) trait Printer {
     fn print_header(
         &mut self,
-        handle: &mut OutputHandle,
+        handle: OutputHandle,
         input: &OpenedInput,
         add_header_padding: bool,
     ) -> Result<()>;
-    fn print_footer(&mut self, handle: &mut OutputHandle, input: &OpenedInput) -> Result<()>;
+    fn print_footer(&mut self, handle: OutputHandle, input: &OpenedInput) -> Result<()>;
 
-    fn print_snip(&mut self, handle: &mut OutputHandle) -> Result<()>;
+    fn print_snip(&mut self, handle: OutputHandle) -> Result<()>;
 
     fn print_line(
         &mut self,
         out_of_range: bool,
-        handle: &mut OutputHandle,
+        handle: OutputHandle,
         line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()>;
@@ -92,25 +78,25 @@ impl<'a> SimplePrinter<'a> {
 impl<'a> Printer for SimplePrinter<'a> {
     fn print_header(
         &mut self,
-        _handle: &mut OutputHandle,
+        _handle: OutputHandle,
         _input: &OpenedInput,
         _add_header_padding: bool,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn print_footer(&mut self, _handle: &mut OutputHandle, _input: &OpenedInput) -> Result<()> {
+    fn print_footer(&mut self, _handle: OutputHandle, _input: &OpenedInput) -> Result<()> {
         Ok(())
     }
 
-    fn print_snip(&mut self, _handle: &mut OutputHandle) -> Result<()> {
+    fn print_snip(&mut self, _handle: OutputHandle) -> Result<()> {
         Ok(())
     }
 
     fn print_line(
         &mut self,
         out_of_range: bool,
-        handle: &mut OutputHandle,
+        handle: OutputHandle,
         _line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()> {
@@ -120,12 +106,7 @@ impl<'a> Printer for SimplePrinter<'a> {
                     replace_nonprintable(line_buffer, self.config.tab_width, nonprintable_notation);
                 write!(handle, "{}", line)?;
             } else {
-                match handle {
-                    OutputHandle::IoWrite(handle) => handle.write_all(line_buffer)?,
-                    OutputHandle::FmtWrite(handle) => {
-                        write!(handle, "{}", std::str::from_utf8(line_buffer)?)?;
-                    }
-                }
+                handle.write_all(line_buffer)?;
             };
         }
         Ok(())
@@ -244,11 +225,7 @@ impl<'a> InteractivePrinter<'a> {
         })
     }
 
-    fn print_horizontal_line_term(
-        &mut self,
-        handle: &mut OutputHandle,
-        style: Style,
-    ) -> Result<()> {
+    fn print_horizontal_line_term(&mut self, handle: OutputHandle, style: Style) -> Result<()> {
         writeln!(
             handle,
             "{}",
@@ -257,7 +234,7 @@ impl<'a> InteractivePrinter<'a> {
         Ok(())
     }
 
-    fn print_horizontal_line(&mut self, handle: &mut OutputHandle, grid_char: char) -> Result<()> {
+    fn print_horizontal_line(&mut self, handle: OutputHandle, grid_char: char) -> Result<()> {
         if self.panel_width == 0 {
             self.print_horizontal_line_term(handle, self.colors.grid)?;
         } else {
@@ -287,7 +264,7 @@ impl<'a> InteractivePrinter<'a> {
         }
     }
 
-    fn print_header_component_indent(&mut self, handle: &mut OutputHandle) -> Result<()> {
+    fn print_header_component_indent(&mut self, handle: OutputHandle) -> Result<()> {
         if self.config.style_components.grid() {
             write!(
                 handle,
@@ -296,10 +273,11 @@ impl<'a> InteractivePrinter<'a> {
                 self.colors
                     .grid
                     .paint(if self.panel_width > 0 { "│ " } else { "" }),
-            )
+            )?
         } else {
-            write!(handle, "{}", " ".repeat(self.panel_width))
+            write!(handle, "{}", " ".repeat(self.panel_width))?
         }
+        Ok(())
     }
 
     fn preprocess(&self, text: &str, cursor: &mut usize) -> String {
@@ -315,7 +293,7 @@ impl<'a> InteractivePrinter<'a> {
 impl<'a> Printer for InteractivePrinter<'a> {
     fn print_header(
         &mut self,
-        handle: &mut OutputHandle,
+        handle: OutputHandle,
         input: &OpenedInput,
         add_header_padding: bool,
     ) -> Result<()> {
@@ -417,7 +395,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
         Ok(())
     }
 
-    fn print_footer(&mut self, handle: &mut OutputHandle, _input: &OpenedInput) -> Result<()> {
+    fn print_footer(&mut self, handle: OutputHandle, _input: &OpenedInput) -> Result<()> {
         if self.config.style_components.grid()
             && (self.content_type.as_ref().map_or(false, |c| c.is_text())
                 || self.config.nonprintable_notation.is_some())
@@ -428,7 +406,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
         }
     }
 
-    fn print_snip(&mut self, handle: &mut OutputHandle) -> Result<()> {
+    fn print_snip(&mut self, handle: OutputHandle) -> Result<()> {
         let panel = self.create_fake_panel(" ...");
         let panel_count = panel.chars().count();
 
@@ -455,7 +433,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
     fn print_line(
         &mut self,
         out_of_range: bool,
-        handle: &mut OutputHandle,
+        handle: OutputHandle,
         line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()> {

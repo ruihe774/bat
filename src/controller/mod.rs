@@ -1,6 +1,8 @@
 use std::io::{self, Write};
+use std::process;
 
 use clircle::{Clircle, Identifier};
+use nu_ansi_term::Color;
 use serde::{Deserialize, Serialize};
 
 use crate::assets::HighlightingAssets;
@@ -52,29 +54,33 @@ pub struct Controller<'a> {
     assets: &'a HighlightingAssets,
 }
 
-impl<'b> Controller<'b> {
-    pub fn new<'a>(config: &'a Config, assets: &'a HighlightingAssets) -> Controller<'a> {
+pub fn default_error_handler(error: &Error, output: &mut dyn Write) {
+    if let Some(io_error) = error.downcast_ref::<io::Error>() {
+        if io_error.kind() == io::ErrorKind::BrokenPipe {
+            process::exit(0);
+        }
+    }
+
+    writeln!(output, "{}: {:?}", Color::Red.paint("[bat error]"), error).unwrap();
+}
+
+impl<'a> Controller<'a> {
+    pub fn new(config: &'a Config, assets: &'a HighlightingAssets) -> Self {
         Controller { config, assets }
     }
 
-    pub fn run(
-        &self,
-        inputs: Vec<Input>,
-        output_buffer: Option<&mut dyn std::fmt::Write>,
-    ) -> Result<bool> {
+    pub fn run(&self, inputs: Vec<Input>, output_buffer: Option<&mut dyn Write>) -> Result<bool> {
         self.run_with_error_handler(inputs, output_buffer, default_error_handler)
     }
 
     pub fn run_with_error_handler(
         &self,
         inputs: Vec<Input>,
-        output_buffer: Option<&mut dyn std::fmt::Write>,
+        output_buffer: Option<&mut dyn Write>,
         handle_error: impl Fn(&Error, &mut dyn Write),
     ) -> Result<bool> {
-        let mut output_type;
-
         #[cfg(feature = "paging")]
-        {
+        let mut output_type = {
             use crate::input::InputKind;
             use std::path::Path;
 
@@ -95,13 +101,11 @@ impl<'b> Controller<'b> {
 
             let wrapping_mode = self.config.wrapping_mode;
 
-            output_type = OutputType::from_mode(paging_mode, wrapping_mode, self.config.pager)?;
-        }
+            OutputType::from_mode(paging_mode, wrapping_mode, self.config.pager)?
+        };
 
         #[cfg(not(feature = "paging"))]
-        {
-            output_type = OutputType::stdout();
-        }
+        let mut output_type = OutputType::stdout();
 
         let attached_to_pager = output_type.is_pager();
         let stdout_identifier = if cfg!(windows) || attached_to_pager {
@@ -110,28 +114,29 @@ impl<'b> Controller<'b> {
             clircle::Identifier::stdout()
         };
 
-        let mut writer = match output_buffer {
-            Some(buf) => OutputHandle::FmtWrite(buf),
-            None => OutputHandle::IoWrite(output_type.handle()?),
-        };
+        let (writer, has_output_buf): (&'_ mut dyn Write, bool) =
+            if let Some(output_buffer) = output_buffer {
+                (output_buffer, true)
+            } else {
+                (output_type.handle()?, false)
+            };
         let mut no_errors: bool = true;
         let stderr = io::stderr();
 
         for (index, input) in inputs.into_iter().enumerate() {
             let identifier = stdout_identifier.as_ref();
             let is_first = index == 0;
-            let result = self.print_input(input, &mut writer, identifier, is_first);
+            let result = self.print_input(input, writer, identifier, is_first);
             if let Err(error) = result {
-                match writer {
+                if has_output_buf {
                     // It doesn't make much sense to send errors straight to stderr if the user
                     // provided their own buffer, so we just return it.
-                    OutputHandle::FmtWrite(_) => return Err(error),
-                    OutputHandle::IoWrite(ref mut writer) => {
-                        if attached_to_pager {
-                            handle_error(&error, writer);
-                        } else {
-                            handle_error(&error, &mut stderr.lock());
-                        }
+                    return Err(error);
+                } else {
+                    if attached_to_pager {
+                        handle_error(&error, writer);
+                    } else {
+                        handle_error(&error, &mut stderr.lock());
                     }
                 }
                 no_errors = false;
@@ -144,7 +149,7 @@ impl<'b> Controller<'b> {
     fn print_input(
         &self,
         input: Input,
-        writer: &mut OutputHandle,
+        writer: OutputHandle,
         stdout_identifier: Option<&Identifier>,
         is_first: bool,
     ) -> Result<()> {
@@ -215,7 +220,7 @@ impl<'b> Controller<'b> {
     fn print_file(
         &self,
         printer: &mut impl Printer,
-        writer: &mut OutputHandle,
+        writer: OutputHandle,
         input: &mut OpenedInput,
         add_header_padding: bool,
         #[cfg(feature = "git")] line_changes: &Option<LineChanges>,
@@ -253,7 +258,7 @@ impl<'b> Controller<'b> {
     fn print_file_ranges(
         &self,
         printer: &mut impl Printer,
-        writer: &mut OutputHandle,
+        writer: OutputHandle,
         reader: &mut InputReader,
         line_ranges: &LineRanges,
     ) -> Result<()> {

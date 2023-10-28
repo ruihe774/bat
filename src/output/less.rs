@@ -1,6 +1,8 @@
 use std::ffi::OsStr;
 use std::process::Command;
 
+use bstr::ByteSlice;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LessVersion {
     Less(usize),
@@ -19,20 +21,23 @@ pub fn retrieve_less_version(less_path: &dyn AsRef<OsStr>) -> Option<LessVersion
 }
 
 fn parse_less_version(output: &[u8]) -> Option<LessVersion> {
-    if !output.starts_with(b"less ") {
-        return None;
-    }
-
-    let version = std::str::from_utf8(&output[5..]).ok()?;
-    let end = version.find(|c: char| !c.is_ascii_digit())?;
-    Some(LessVersion::Less(version[..end].parse::<usize>().ok()?))
+    output
+        .strip_prefix(b"less ")
+        .and_then(|version| {
+            let len = version
+                .iter()
+                .take_while(|byte| byte.is_ascii_digit())
+                .count();
+            let version = &version[..len];
+            std::str::from_utf8(version).unwrap().parse().ok()
+        })
+        .map(|version| LessVersion::Less(version))
 }
 
 fn parse_less_version_busybox(output: &[u8]) -> Option<LessVersion> {
-    match std::str::from_utf8(output) {
-        Ok(version) if version.contains("BusyBox ") => Some(LessVersion::BusyBox),
-        _ => None,
-    }
+    output
+        .contains_str("BusyBox ")
+        .then_some(LessVersion::BusyBox)
 }
 
 #[test]

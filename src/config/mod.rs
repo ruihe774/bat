@@ -43,7 +43,8 @@ pub struct Config<'a> {
 
     /// Pager or STDOUT
     #[cfg(feature = "paging")]
-    pub paging_mode: PagingMode,
+    #[serde(default)]
+    pub paging_mode: Option<PagingMode>,
 
     /// Specifies which lines should be printed
     #[serde(default)]

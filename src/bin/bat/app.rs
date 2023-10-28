@@ -226,7 +226,7 @@ impl App {
                     Some("auto") => env::var_os("NO_COLOR").is_none() && self.interactive_output,
                     _ => unreachable!("other values for --color are not allowed"),
                 },
-            paging_mode,
+            paging_mode: Some(paging_mode),
             term_width: maybe_term_width.unwrap_or(Term::stdout().size().1 as usize),
             loop_through: !(self.interactive_output
                 || self.matches.get_one::<String>("color").map(|s| s.as_str()) == Some("always")

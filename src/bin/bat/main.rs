@@ -298,7 +298,7 @@ fn run() -> Result<bool> {
                 ))];
                 let plain_config = Config {
                     style_components: StyleComponents::new(StyleComponent::Plain.components(false)),
-                    paging_mode: PagingMode::QuitIfOneScreen,
+                    paging_mode: Some(PagingMode::QuitIfOneScreen),
                     ..Default::default()
                 };
                 run_controller(inputs, &plain_config, cache_dir)

@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::process;
 
 use clircle::{Clircle, Identifier};
@@ -57,30 +57,18 @@ impl<'a> Controller<'a> {
         output_buffer: Option<&mut dyn Write>,
         handle_error: impl Fn(&Error, &mut dyn Write),
     ) -> Result<bool> {
+        let interactive = output_buffer.is_none() && io::stdout().is_terminal();
+
         #[cfg(feature = "paging")]
-        let mut output_type = {
-            use crate::input::InputKind;
-            use std::path::Path;
-
-            // Do not launch the pager if NONE of the input files exist
-            let mut paging_mode = self.config.paging_mode;
-            if self.config.paging_mode != PagingMode::Never {
-                let call_pager = inputs.iter().any(|input| {
-                    if let InputKind::OrdinaryFile(ref path) = input.kind {
-                        Path::new(path).exists()
-                    } else {
-                        true
-                    }
-                });
-                if !call_pager {
-                    paging_mode = PagingMode::Never;
-                }
-            }
-
-            let wrapping_mode = self.config.wrapping_mode;
-
-            OutputType::from_mode(paging_mode, wrapping_mode, self.config.pager)?
-        };
+        let mut output_type = OutputType::from_mode(
+            self.config.paging_mode.unwrap_or(if interactive {
+                PagingMode::QuitIfOneScreen
+            } else {
+                PagingMode::Never
+            }),
+            self.config.wrapping_mode,
+            self.config.pager,
+        )?;
 
         #[cfg(not(feature = "paging"))]
         let mut output_type = OutputType::stdout();

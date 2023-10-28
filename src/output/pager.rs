@@ -4,11 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::*;
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PagingMode {
     Always,
     QuitIfOneScreen,
-    #[default]
     Never,
 }
 

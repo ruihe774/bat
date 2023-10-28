@@ -1,7 +1,9 @@
-use std::fmt::Display;
+use std::error::Error as StdError;
+use std::fmt::{self, Display};
 use std::io::{self, Write};
+use std::mem;
 #[cfg(feature = "paging")]
-use std::process::Child;
+use std::process::{Child, ChildStdin};
 
 use crate::error::*;
 use crate::printer::WrappingMode;
@@ -17,7 +19,7 @@ pub mod pager;
 pub struct InvalidPagerValueBat;
 
 impl Display for InvalidPagerValueBat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "use of bat as a pager is disallowed to avoid infinite recursion"
@@ -25,7 +27,7 @@ impl Display for InvalidPagerValueBat {
     }
 }
 
-impl std::error::Error for InvalidPagerValueBat {}
+impl StdError for InvalidPagerValueBat {}
 
 #[cfg(feature = "paging")]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -37,7 +39,7 @@ enum SingleScreenAction {
 #[derive(Debug)]
 pub(crate) enum OutputType {
     #[cfg(feature = "paging")]
-    Pager(Child),
+    Pager(Child, Option<io::LineWriter<ChildStdin>>),
     Stdout(io::Stdout),
 }
 
@@ -48,10 +50,11 @@ impl OutputType {
         wrapping_mode: WrappingMode,
         pager: Option<&str>,
     ) -> Result<Self> {
-        use self::PagingMode::*;
         Ok(match paging_mode {
-            Always => OutputType::try_pager(SingleScreenAction::Nothing, wrapping_mode, pager)?,
-            QuitIfOneScreen => {
+            PagingMode::Always => {
+                OutputType::try_pager(SingleScreenAction::Nothing, wrapping_mode, pager)?
+            }
+            PagingMode::QuitIfOneScreen => {
                 OutputType::try_pager(SingleScreenAction::Quit, wrapping_mode, pager)?
             }
             _ => OutputType::stdout(),
@@ -140,32 +143,43 @@ impl OutputType {
 
         Ok(p.stdin(Stdio::piped())
             .spawn()
-            .map(OutputType::Pager)
-            .unwrap_or_else(|_| OutputType::stdout()))
+            .ok()
+            .map(|mut child| {
+                let stdin = child.stdin.take();
+                (child, stdin)
+            })
+            .and_then(|(mut child, stdin)| {
+                if let Some(stdin) = stdin {
+                    Some((child, stdin))
+                } else {
+                    _ = child.kill();
+                    _ = child.wait();
+                    None
+                }
+            })
+            .map(|(child, stdin)| OutputType::Pager(child, Some(io::LineWriter::new(stdin))))
+            .unwrap_or_else(|| OutputType::stdout()))
     }
 
-    pub(crate) fn stdout() -> Self {
+    pub fn stdout() -> Self {
         OutputType::Stdout(io::stdout())
     }
 
     #[cfg(feature = "paging")]
-    pub(crate) fn is_pager(&self) -> bool {
-        matches!(self, OutputType::Pager(_))
+    pub fn is_pager(&self) -> bool {
+        matches!(self, OutputType::Pager(_, _))
     }
 
     #[cfg(not(feature = "paging"))]
-    pub(crate) fn is_pager(&self) -> bool {
+    pub fn is_pager(&self) -> bool {
         false
     }
 
     pub fn handle(&mut self) -> Result<&mut dyn Write> {
-        Ok(match *self {
+        Ok(match self {
             #[cfg(feature = "paging")]
-            OutputType::Pager(ref mut command) => command
-                .stdin
-                .as_mut()
-                .expect("could not open stdin for pager"),
-            OutputType::Stdout(ref mut handle) => handle,
+            OutputType::Pager(_, handle) => handle.as_mut().unwrap(),
+            OutputType::Stdout(handle) => handle,
         })
     }
 }
@@ -173,8 +187,9 @@ impl OutputType {
 #[cfg(feature = "paging")]
 impl Drop for OutputType {
     fn drop(&mut self) {
-        if let OutputType::Pager(ref mut command) = *self {
-            let _ = command.wait();
+        if let OutputType::Pager(child, stdin) = self {
+            mem::drop(stdin.take());
+            _ = child.wait();
         }
     }
 }

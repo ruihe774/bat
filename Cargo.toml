@@ -132,12 +132,25 @@ optional = true
 version = "0.5"
 optional = true
 default-features = false
-features = ["collector_operating_system", "git_hash", "format_plaintext"]
+features = [
+    "collector_operating_system",
+    "git_hash",
+    "format_plaintext"
+]
 
 [dependencies.clap]
 version = "4.4"
 optional = true
-features = ["wrap_help", "cargo"]
+default-features = false
+features = [
+    "std",
+    "help",
+    "usage",
+    "error-context",
+    "suggestions",
+    "wrap_help",
+    "cargo"
+]
 
 [dependencies.libmimalloc-sys]
 version = "0.1"

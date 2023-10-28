@@ -44,12 +44,12 @@ impl App {
         let interactive_output = std::io::stdout().is_terminal();
 
         Ok(App {
-            matches: Self::matches(interactive_output)?,
+            matches: Self::matches()?,
             interactive_output,
         })
     }
 
-    fn matches(interactive_output: bool) -> Result<ArgMatches> {
+    fn matches() -> Result<ArgMatches> {
         let args = if wild::args_os().nth(1) == Some("cache".into()) {
             // Skip the config file and env vars
 
@@ -86,7 +86,7 @@ impl App {
             args
         };
 
-        Ok(clap_app::build_app(interactive_output).get_matches_from(args))
+        Ok(clap_app::build_app().get_matches_from(args))
     }
 
     pub fn config(&self, inputs: &[Input]) -> Result<Config> {

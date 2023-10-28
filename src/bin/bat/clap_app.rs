@@ -1,4 +1,4 @@
-use clap::{crate_name, crate_version, value_parser, Arg, ArgAction, ColorChoice, Command};
+use clap::{crate_name, crate_version, value_parser, Arg, ArgAction, Command};
 use once_cell::sync::Lazy;
 use std::env;
 use std::path::PathBuf;
@@ -16,16 +16,9 @@ static VERSION: Lazy<String> = Lazy::new(|| {
     }
 });
 
-pub fn build_app(interactive_output: bool) -> Command {
-    let color_when = if interactive_output && env::var_os("NO_COLOR").is_none() {
-        ColorChoice::Auto
-    } else {
-        ColorChoice::Never
-    };
-
+pub fn build_app() -> Command {
     let mut app = Command::new(crate_name!())
         .version(VERSION.as_str())
-        .color(color_when)
         .hide_possible_values(true)
         .args_conflicts_with_subcommands(true)
         .allow_external_subcommands(true)
@@ -598,5 +591,5 @@ pub fn build_app(interactive_output: bool) -> Command {
 
 #[test]
 fn verify_app() {
-    build_app(false).debug_assert();
+    build_app().debug_assert();
 }

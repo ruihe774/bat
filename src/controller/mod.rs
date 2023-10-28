@@ -74,7 +74,7 @@ impl<'a> Controller<'a> {
         let mut output_type = OutputType::stdout();
 
         let attached_to_pager = output_type.is_pager();
-        let stdout_identifier = if cfg!(windows) || attached_to_pager {
+        let stdout_identifier = if attached_to_pager {
             None
         } else {
             clircle::Identifier::stdout()
@@ -84,10 +84,10 @@ impl<'a> Controller<'a> {
             if let Some(output_buffer) = output_buffer {
                 (output_buffer, true)
             } else {
-                (output_type.handle()?, false)
+                (output_type.handle(), false)
             };
         let mut no_errors: bool = true;
-        let stderr = io::stderr();
+        let mut stderr = io::stderr();
 
         for (index, input) in inputs.into_iter().enumerate() {
             let identifier = stdout_identifier.as_ref();
@@ -102,7 +102,7 @@ impl<'a> Controller<'a> {
                     if attached_to_pager {
                         handle_error(&error, writer);
                     } else {
-                        handle_error(&error, &mut stderr.lock());
+                        handle_error(&error, &mut stderr);
                     }
                 }
                 no_errors = false;
@@ -146,9 +146,8 @@ impl<'a> Controller<'a> {
         }
 
         if input.reader.content_type.is_some() {
-            let line_ranges = self.config.visible_lines.0.clone();
-
-            self.print_file_ranges(printer, writer, &mut input.reader, &line_ranges)?;
+            let line_ranges = &self.config.visible_lines.0;
+            self.print_file_ranges(printer, writer, &mut input.reader, line_ranges)?;
         }
         printer.print_footer(writer, input)?;
 
@@ -163,14 +162,21 @@ impl<'a> Controller<'a> {
         line_ranges: &LineRanges,
     ) -> Result<()> {
         let mut line_buffer = Vec::new();
-        let mut line_number: usize = 1;
 
         let mut first_range: bool = true;
         let mut mid_range: bool = false;
 
         let style_snip = self.config.style_components.snip();
 
-        while reader.read_line(&mut line_buffer)? {
+        for line_number in 1.. {
+            let range_check = line_ranges.check(line_number);
+            if range_check == RangeCheckResult::AfterLastRange {
+                break
+            }
+            if !reader.read_line(&mut line_buffer)? {
+                break
+            }
+
             match line_ranges.check(line_number) {
                 RangeCheckResult::BeforeOrBetweenRanges => {
                     // Call the printer in case we need to call the syntax highlighter
@@ -192,14 +198,13 @@ impl<'a> Controller<'a> {
 
                     printer.print_line(false, writer, line_number, &line_buffer)?;
                 }
-                RangeCheckResult::AfterLastRange => {
-                    break;
-                }
+
+                RangeCheckResult::AfterLastRange => unreachable!()
             }
 
-            line_number += 1;
             line_buffer.clear();
         }
+
         Ok(())
     }
 }

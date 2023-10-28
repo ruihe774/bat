@@ -175,12 +175,12 @@ impl OutputType {
         false
     }
 
-    pub fn handle(&mut self) -> Result<&mut dyn Write> {
-        Ok(match self {
+    pub fn handle(&mut self) -> &mut dyn Write {
+        match self {
             #[cfg(feature = "paging")]
             OutputType::Pager(_, handle) => handle.as_mut().unwrap(),
             OutputType::Stdout(handle) => handle,
-        })
+        }
     }
 }
 

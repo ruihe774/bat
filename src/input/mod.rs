@@ -242,7 +242,7 @@ pub(crate) struct InputReader {
 impl InputReader {
     pub(crate) fn new<R: BufRead + 'static>(mut reader: R) -> InputReader {
         let first_read = reader.fill_buf().ok().and_then(|buf| {
-            let limit = page_size::get().min(2 * 1024 * 1024);
+            let limit = 8192;
             let len = buf.len();
             (len != 0).then_some(&buf[..limit.min(len)])
         });

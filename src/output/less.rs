@@ -9,7 +9,7 @@ pub enum LessVersion {
     BusyBox,
 }
 
-pub fn retrieve_less_version(less_path: &dyn AsRef<OsStr>) -> Option<LessVersion> {
+pub fn retrieve_less_version(less_path: &impl AsRef<OsStr>) -> Option<LessVersion> {
     let resolved_path = grep_cli::resolve_binary(less_path.as_ref()).ok()?;
 
     let cmd = Command::new(resolved_path).arg("--version").output().ok()?;

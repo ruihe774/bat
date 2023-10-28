@@ -40,7 +40,7 @@ enum SingleScreenAction {
 pub(crate) enum OutputType {
     #[cfg(feature = "paging")]
     Pager(Child, Option<io::LineWriter<ChildStdin>>),
-    Stdout(io::Stdout),
+    Stdout(io::StdoutLock<'static>),
 }
 
 impl OutputType {
@@ -175,7 +175,7 @@ impl OutputType {
     }
 
     pub fn stdout() -> Self {
-        OutputType::Stdout(io::stdout())
+        OutputType::Stdout(io::stdout().lock())
     }
 
     #[cfg(feature = "paging")]

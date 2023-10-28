@@ -105,6 +105,7 @@ impl OutputType {
 
             if args.is_empty() || replace_arguments_to_less {
                 p.arg("-R"); // Short version of --RAW-CONTROL-CHARS for maximum compatibility
+
                 if single_screen_action == SingleScreenAction::Quit {
                     p.arg("-F"); // Short version of --quit-if-one-screen for compatibility
                 }
@@ -122,30 +123,33 @@ impl OutputType {
                 {
                     p.arg("--no-init");
                 }
+
+                if less_version >= 600 {
+                    let mut col_header = 0;
+                    let have_numbers = config.style_components.numbers();
+    
+                    if have_numbers && panel_width > 0 {
+                        col_header += panel_width;
+                    }
+    
+                    if col_header > 0 {
+                        p.arg("--header");
+                        p.arg(format!("0,{col_header}"));
+                        p.arg("--no-search-headers");
+                    }
+                }
             } else {
                 p.args(args);
             }
 
             p.env("LESSCHARSET", "UTF-8");
 
-            if less_version >= 600 {
-                let mut col_header = 0;
-                let have_numbers = config.style_components.numbers();
-
-                if have_numbers && panel_width > 0 {
-                    col_header += panel_width;
-                }
-
-                if col_header > 0 {
-                    let header_args = format!("0,{col_header}");
-                    p.args(vec!["--header", &header_args]);
-                    p.arg("--no-search-headers");
-                }
-            }
-
             #[cfg(feature = "lessopen")]
             // Ensures that 'less' does not preprocess input again if '$LESSOPEN' is set.
-            p.arg("--no-lessopen");
+            {
+                p.env_remove("LESSOPEN");
+                p.env_remove("LESSCLOSE");
+            }
         } else {
             p.args(args);
         };

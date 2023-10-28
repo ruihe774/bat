@@ -1,190 +1,170 @@
-use std::fmt::Display;
+use std::cmp::Ordering;
+use std::error::Error as StdError;
+use std::fmt::{self, Display};
+use std::ops::{Bound, RangeBounds};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::*;
+#[derive(Debug)]
+pub struct LineRangeParseError {
+    pub value: String,
+}
+
+impl Display for LineRangeParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "failed to parse line range '{}'", self.value)
+    }
+}
+
+impl StdError for LineRangeParseError {}
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[serde(
+    from = "Option<serialize::LineRange>",
+    into = "Option<serialize::LineRange>"
+)]
 pub struct LineRange {
-    lower: usize,
-    upper: usize,
+    pub start: Bound<usize>,
+    pub end: Bound<usize>,
+}
+
+impl RangeBounds<usize> for LineRange {
+    fn start_bound(&self) -> Bound<&usize> {
+        self.start.as_ref()
+    }
+
+    fn end_bound(&self) -> Bound<&usize> {
+        self.end.as_ref()
+    }
+
+    fn contains<U>(&self, item: &U) -> bool
+    where
+        usize: PartialOrd<U>,
+        U: ?Sized + PartialOrd<usize>,
+    {
+        let left = match self.start {
+            Bound::Unbounded => true,
+            Bound::Included(ref v) => v <= item,
+            Bound::Excluded(ref v) => v < item,
+        };
+        let right = match self.end {
+            Bound::Unbounded => true,
+            Bound::Included(ref v) => item <= v,
+            Bound::Excluded(ref v) => item < v,
+        };
+        left && right
+    }
 }
 
 impl Default for LineRange {
-    fn default() -> LineRange {
+    fn default() -> Self {
         LineRange {
-            lower: usize::min_value(),
-            upper: usize::max_value(),
+            start: Bound::Unbounded,
+            end: Bound::Unbounded,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct InvalidLineRange(String);
+mod serialize {
+    use super::*;
+    #[derive(Serialize, Deserialize)]
+    pub struct LineRange(Option<usize>, Option<usize>);
 
-impl Display for InvalidLineRange {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid line ranges '{}'", self.0)
+    impl Into<Option<LineRange>> for super::LineRange {
+        fn into(self) -> Option<LineRange> {
+            match (self.start, self.end) {
+                (Bound::Unbounded, Bound::Unbounded) => None,
+                (Bound::Excluded(_), _) | (_, Bound::Excluded(_)) => {
+                    panic!("cannot serialize non-inclusive LineRange")
+                }
+                _ => Some(LineRange(
+                    if let Bound::Included(left) = self.start {
+                        Some(left)
+                    } else {
+                        None
+                    },
+                    if let Bound::Included(right) = self.end {
+                        Some(right)
+                    } else {
+                        None
+                    },
+                )),
+            }
+        }
+    }
+
+    impl From<Option<LineRange>> for super::LineRange {
+        fn from(value: Option<LineRange>) -> Self {
+            match value {
+                Some(LineRange(left, right)) => super::LineRange {
+                    start: left
+                        .map(|left| Bound::Included(left))
+                        .unwrap_or(Bound::Unbounded),
+                    end: right
+                        .map(|right| Bound::Included(right))
+                        .unwrap_or(Bound::Unbounded),
+                },
+                None => super::LineRange::default(),
+            }
+        }
     }
 }
-
-impl std::error::Error for InvalidLineRange {}
 
 impl LineRange {
-    pub fn new(from: usize, to: usize) -> Self {
-        LineRange {
-            lower: from,
-            upper: to,
-        }
-    }
-
-    pub fn from(range_raw: &str) -> Result<LineRange> {
-        LineRange::parse_range(range_raw)
-    }
-
-    fn parse_range(range_raw: &str) -> Result<LineRange> {
+    pub fn parse(range_raw: &str) -> Result<LineRange, LineRangeParseError> {
         let mut new_range = LineRange::default();
 
-        let invalid = || InvalidLineRange(range_raw.to_owned());
+        let invalid = || LineRangeParseError {
+            value: range_raw.to_owned(),
+        };
 
-        if range_raw.bytes().next().ok_or_else(invalid)? == b':' {
-            new_range.upper = range_raw[1..].parse().map_err(|_| invalid())?;
+        if let Some(upper) = range_raw.strip_prefix(':') {
+            new_range.end = Bound::Included(upper.parse().map_err(|_| invalid())?);
             return Ok(new_range);
-        } else if range_raw.bytes().last().ok_or_else(invalid)? == b':' {
-            new_range.lower = range_raw[..range_raw.len() - 1]
-                .parse()
-                .map_err(|_| invalid())?;
+        } else if let Some(lower) = range_raw.strip_suffix(':') {
+            new_range.start = Bound::Included(lower.parse().map_err(|_| invalid())?);
             return Ok(new_range);
         }
 
-        let line_numbers: Vec<&str> = range_raw.split(':').collect();
-        match line_numbers.len() {
-            1 => {
-                new_range.lower = line_numbers[0].parse().map_err(|_| invalid())?;
-                new_range.upper = new_range.lower;
+        let mut iter = range_raw.split(':');
+        let line_numbers = (iter.next(), iter.next());
+        if iter.next().is_some() {
+            return Err(invalid());
+        }
+
+        match line_numbers {
+            (Some(number), None) => {
+                let number = number.parse().map_err(|_| invalid())?;
+                new_range.start = Bound::Included(number);
+                new_range.end = Bound::Included(number);
                 Ok(new_range)
             }
-            2 => {
-                new_range.lower = line_numbers[0].parse().map_err(|_| invalid())?;
-                let first_byte = line_numbers[1].bytes().next();
+            (Some(left), Some(right)) => {
+                let lower = left.parse().map_err(|_| invalid())?;
+                new_range.start = Bound::Included(lower);
 
-                new_range.upper = if first_byte == Some(b'+') {
-                    let more_lines = &line_numbers[1][1..].parse().map_err(|_| invalid())?;
-                    new_range.lower.saturating_add(*more_lines)
-                } else if first_byte == Some(b'-') {
-                    // this will prevent values like "-+5" even though "+5" is valid integer
-                    if line_numbers[1][1..].bytes().next() == Some(b'+') {
-                        return Err(invalid().into());
+                if let Some(upper) = right.strip_prefix('+') {
+                    let upper = upper.parse().map_err(|_| invalid())?;
+                    let upper = lower.checked_add(upper).ok_or_else(invalid)?;
+                    new_range.end = Bound::Included(upper)
+                } else if let Some(upper) = right.strip_prefix('-') {
+                    if upper.strip_prefix('+').is_some() {
+                        return Err(invalid());
                     }
-                    let prior_lines = &line_numbers[1][1..].parse().map_err(|_| invalid())?;
-                    let prev_lower = new_range.lower;
-                    new_range.lower = new_range.lower.saturating_sub(*prior_lines);
-                    prev_lower
+                    let upper = upper.parse().map_err(|_| invalid())?;
+                    let upper = lower.checked_sub(upper).ok_or_else(invalid)?;
+                    new_range.start = Bound::Included(upper);
+                    new_range.end = Bound::Included(lower);
                 } else {
-                    line_numbers[1].parse().map_err(|_| invalid())?
-                };
+                    let upper = right.parse().map_err(|_| invalid())?;
+                    new_range.end = Bound::Included(upper);
+                }
 
                 Ok(new_range)
             }
-            _ => Err(invalid().into()),
+            _ => Err(invalid()),
         }
     }
-
-    pub(crate) fn is_inside(&self, line: usize) -> bool {
-        line >= self.lower && line <= self.upper
-    }
-}
-
-#[test]
-fn test_parse_full() {
-    let range = LineRange::from("40:50").expect("Shouldn't fail on test!");
-    assert_eq!(40, range.lower);
-    assert_eq!(50, range.upper);
-}
-
-#[test]
-fn test_parse_partial_min() {
-    let range = LineRange::from(":50").expect("Shouldn't fail on test!");
-    assert_eq!(usize::min_value(), range.lower);
-    assert_eq!(50, range.upper);
-}
-
-#[test]
-fn test_parse_partial_max() {
-    let range = LineRange::from("40:").expect("Shouldn't fail on test!");
-    assert_eq!(40, range.lower);
-    assert_eq!(usize::max_value(), range.upper);
-}
-
-#[test]
-fn test_parse_single() {
-    let range = LineRange::from("40").expect("Shouldn't fail on test!");
-    assert_eq!(40, range.lower);
-    assert_eq!(40, range.upper);
-}
-
-#[test]
-fn test_parse_fail() {
-    let range = LineRange::from("40:50:80");
-    assert!(range.is_err());
-    let range = LineRange::from("40::80");
-    assert!(range.is_err());
-    let range = LineRange::from(":40:");
-    assert!(range.is_err());
-}
-
-#[test]
-fn test_parse_plus() {
-    let range = LineRange::from("40:+10").expect("Shouldn't fail on test!");
-    assert_eq!(40, range.lower);
-    assert_eq!(50, range.upper);
-}
-
-#[test]
-fn test_parse_plus_overflow() {
-    let range = LineRange::from(&format!("{}:+1", usize::MAX)).expect("Shouldn't fail on test!");
-    assert_eq!(usize::MAX, range.lower);
-    assert_eq!(usize::MAX, range.upper);
-}
-
-#[test]
-fn test_parse_plus_fail() {
-    let range = LineRange::from("40:+z");
-    assert!(range.is_err());
-    let range = LineRange::from("40:+-10");
-    assert!(range.is_err());
-    let range = LineRange::from("40:+");
-    assert!(range.is_err());
-}
-
-#[test]
-fn test_parse_minus_success() {
-    let range = LineRange::from("40:-10").expect("Shouldn't fail on test!");
-    assert_eq!(30, range.lower);
-    assert_eq!(40, range.upper);
-}
-
-#[test]
-fn test_parse_minus_edge_cases_success() {
-    let range = LineRange::from("5:-4").expect("Shouldn't fail on test!");
-    assert_eq!(1, range.lower);
-    assert_eq!(5, range.upper);
-    let range = LineRange::from("5:-5").expect("Shouldn't fail on test!");
-    assert_eq!(0, range.lower);
-    assert_eq!(5, range.upper);
-    let range = LineRange::from("5:-100").expect("Shouldn't fail on test!");
-    assert_eq!(0, range.lower);
-    assert_eq!(5, range.upper);
-}
-
-#[test]
-fn test_parse_minus_fail() {
-    let range = LineRange::from("40:-z");
-    assert!(range.is_err());
-    let range = LineRange::from("40:-+10");
-    assert!(range.is_err());
-    let range = LineRange::from("40:-");
-    assert!(range.is_err());
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -200,10 +180,8 @@ pub enum RangeCheckResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LineRanges {
-    ranges: Vec<LineRange>,
-    largest_upper_bound: usize,
-}
+#[serde(transparent)]
+pub struct LineRanges(Vec<LineRange>);
 
 impl LineRanges {
     pub fn none() -> LineRanges {
@@ -214,22 +192,32 @@ impl LineRanges {
         LineRanges::from(vec![LineRange::default()])
     }
 
-    pub fn from(ranges: Vec<LineRange>) -> LineRanges {
-        let largest_upper_bound = ranges
-            .iter()
-            .map(|r| r.upper)
-            .max()
-            .unwrap_or(usize::max_value());
-        LineRanges {
-            ranges,
-            largest_upper_bound,
-        }
+    pub fn from(mut ranges: Vec<LineRange>) -> LineRanges {
+        ranges.sort_by(|a, b| match (a.end_bound(), b.end_bound()) {
+            (Bound::Unbounded, Bound::Unbounded) => Ordering::Equal,
+            (_, Bound::Unbounded) => Ordering::Less,
+            (Bound::Unbounded, _) => Ordering::Greater,
+            (Bound::Included(left), Bound::Included(right)) => left.cmp(right),
+            (Bound::Excluded(left), Bound::Excluded(right)) => left.cmp(right),
+            (Bound::Included(left), Bound::Excluded(right)) => left
+                .checked_add(1)
+                .map_or(Ordering::Greater, |left| left.cmp(right)),
+            (Bound::Excluded(left), Bound::Included(right)) => right
+                .checked_add(1)
+                .map_or(Ordering::Less, |right| left.cmp(&right)),
+        });
+        LineRanges(ranges)
     }
 
     pub(crate) fn check(&self, line: usize) -> RangeCheckResult {
-        if self.ranges.iter().any(|r| r.is_inside(line)) {
+        if self.0.iter().any(|r| r.contains(&line)) {
             RangeCheckResult::InRange
-        } else if line < self.largest_upper_bound {
+        } else if match self.0.last().map(|range| range.end) {
+            None => false,
+            Some(Bound::Included(upper)) => line <= upper,
+            Some(Bound::Excluded(upper)) => line < upper,
+            Some(Bound::Unbounded) => true,
+        } {
             RangeCheckResult::BeforeOrBetweenRanges
         } else {
             RangeCheckResult::AfterLastRange
@@ -254,62 +242,157 @@ impl Default for HighlightedLineRanges {
 }
 
 #[cfg(test)]
-fn ranges(rs: &[&str]) -> LineRanges {
-    LineRanges::from(rs.iter().map(|r| LineRange::from(r).unwrap()).collect())
-}
+mod test {
+    use super::*;
+    use std::ops::Bound::*;
 
-#[test]
-fn test_ranges_simple() {
-    let ranges = ranges(&["3:8"]);
+    #[test]
+    fn test_parse_full() {
+        let range = LineRange::parse("40:50").expect("Shouldn't fail on test!");
+        assert_eq!(Included(40), range.start);
+        assert_eq!(Included(50), range.end);
+    }
 
-    assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(2));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(5));
-    assert_eq!(RangeCheckResult::AfterLastRange, ranges.check(9));
-}
+    #[test]
+    fn test_parse_partial_min() {
+        let range = LineRange::parse(":50").expect("Shouldn't fail on test!");
+        assert_eq!(Unbounded, range.start);
+        assert_eq!(Included(50), range.end);
+    }
 
-#[test]
-fn test_ranges_advanced() {
-    let ranges = ranges(&["3:8", "11:20", "25:30"]);
+    #[test]
+    fn test_parse_partial_max() {
+        let range = LineRange::parse("40:").expect("Shouldn't fail on test!");
+        assert_eq!(Included(40), range.start);
+        assert_eq!(Unbounded, range.end);
+    }
 
-    assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(2));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(5));
-    assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(9));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(11));
-    assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(22));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(28));
-    assert_eq!(RangeCheckResult::AfterLastRange, ranges.check(31));
-}
+    #[test]
+    fn test_parse_single() {
+        let range = LineRange::parse("40").expect("Shouldn't fail on test!");
+        assert_eq!(Included(40), range.start);
+        assert_eq!(Included(40), range.end);
+    }
 
-#[test]
-fn test_ranges_open_low() {
-    let ranges = ranges(&["3:8", ":5"]);
+    #[test]
+    fn test_parse_fail() {
+        let range = LineRange::parse("40:50:80");
+        assert!(range.is_err());
+        let range = LineRange::parse("40::80");
+        assert!(range.is_err());
+        let range = LineRange::parse(":40:");
+        assert!(range.is_err());
+    }
 
-    assert_eq!(RangeCheckResult::InRange, ranges.check(1));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(3));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(7));
-    assert_eq!(RangeCheckResult::AfterLastRange, ranges.check(9));
-}
+    #[test]
+    fn test_parse_plus() {
+        let range = LineRange::parse("40:+10").expect("Shouldn't fail on test!");
+        assert_eq!(Included(40), range.start);
+        assert_eq!(Included(50), range.end);
+    }
 
-#[test]
-fn test_ranges_open_high() {
-    let ranges = ranges(&["3:", "2:5"]);
+    #[test]
+    fn test_parse_plus_overflow() {
+        let range = LineRange::parse(&format!("{}:+1", usize::MAX));
+        assert!(range.is_err());
+    }
 
-    assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(1));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(3));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(5));
-    assert_eq!(RangeCheckResult::InRange, ranges.check(9));
-}
+    #[test]
+    fn test_parse_plus_fail() {
+        let range = LineRange::parse("40:+z");
+        assert!(range.is_err());
+        let range = LineRange::parse("40:+-10");
+        assert!(range.is_err());
+        let range = LineRange::parse("40:+");
+        assert!(range.is_err());
+    }
 
-#[test]
-fn test_ranges_all() {
-    let ranges = LineRanges::all();
+    #[test]
+    fn test_parse_minus_success() {
+        let range = LineRange::parse("40:-10").expect("Shouldn't fail on test!");
+        assert_eq!(Included(30), range.start);
+        assert_eq!(Included(40), range.end);
+    }
 
-    assert_eq!(RangeCheckResult::InRange, ranges.check(1));
-}
+    #[test]
+    fn test_parse_minus_edge_cases_success() {
+        let range = LineRange::parse("5:-4").expect("Shouldn't fail on test!");
+        assert_eq!(Included(1), range.start);
+        assert_eq!(Included(5), range.end);
+        let range = LineRange::parse("5:-5").expect("Shouldn't fail on test!");
+        assert_eq!(Included(0), range.start);
+        assert_eq!(Included(5), range.end);
+        let range = LineRange::parse("5:-100");
+        assert!(range.is_err());
+    }
 
-#[test]
-fn test_ranges_none() {
-    let ranges = LineRanges::none();
+    #[test]
+    fn test_parse_minus_fail() {
+        let range = LineRange::parse("40:-z");
+        assert!(range.is_err());
+        let range = LineRange::parse("40:-+10");
+        assert!(range.is_err());
+        let range = LineRange::parse("40:-");
+        assert!(range.is_err());
+    }
 
-    assert_ne!(RangeCheckResult::InRange, ranges.check(1));
+    fn ranges(rs: &[&str]) -> LineRanges {
+        LineRanges::from(rs.iter().map(|r| LineRange::parse(r).unwrap()).collect())
+    }
+
+    #[test]
+    fn test_ranges_simple() {
+        let ranges = ranges(&["3:8"]);
+
+        assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(2));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(5));
+        assert_eq!(RangeCheckResult::AfterLastRange, ranges.check(9));
+    }
+
+    #[test]
+    fn test_ranges_advanced() {
+        let ranges = ranges(&["3:8", "11:20", "25:30"]);
+
+        assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(2));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(5));
+        assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(9));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(11));
+        assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(22));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(28));
+        assert_eq!(RangeCheckResult::AfterLastRange, ranges.check(31));
+    }
+
+    #[test]
+    fn test_ranges_open_low() {
+        let ranges = ranges(&["3:8", ":5"]);
+
+        assert_eq!(RangeCheckResult::InRange, ranges.check(1));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(3));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(7));
+        assert_eq!(RangeCheckResult::AfterLastRange, ranges.check(9));
+    }
+
+    #[test]
+    fn test_ranges_open_high() {
+        let ranges = ranges(&["3:", "2:5"]);
+
+        assert_eq!(RangeCheckResult::BeforeOrBetweenRanges, ranges.check(1));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(3));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(5));
+        assert_eq!(RangeCheckResult::InRange, ranges.check(9));
+    }
+
+    #[test]
+    fn test_ranges_all() {
+        let ranges = LineRanges::all();
+
+        assert_eq!(RangeCheckResult::InRange, ranges.check(1));
+    }
+
+    #[test]
+    fn test_ranges_none() {
+        let ranges = LineRanges::none();
+
+        assert_ne!(RangeCheckResult::InRange, ranges.check(1));
+    }
 }

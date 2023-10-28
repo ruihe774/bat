@@ -273,7 +273,7 @@ impl App {
                 _ => VisibleLines::Ranges(
                     self.matches
                         .get_many::<String>("line-range")
-                        .map(|vs| vs.map(|s| LineRange::from(s.as_str())).collect())
+                        .map(|vs| vs.map(|s| LineRange::parse(s.as_str())).collect())
                         .transpose()?
                         .map(LineRanges::from)
                         .unwrap_or_default(),
@@ -290,7 +290,7 @@ impl App {
             highlighted_lines: self
                 .matches
                 .get_many::<String>("highlight-line")
-                .map(|ws| ws.map(|s| LineRange::from(s.as_str())).collect())
+                .map(|ws| ws.map(|s| LineRange::parse(s.as_str())).collect())
                 .transpose()?
                 .map(LineRanges::from)
                 .map(HighlightedLineRanges)

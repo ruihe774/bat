@@ -1,7 +1,8 @@
 use std::env;
 
 use serde::{Deserialize, Serialize};
-use shell_words::ParseError;
+
+use crate::error::*;
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PagingMode {
@@ -100,7 +101,7 @@ impl Pager {
 }
 
 /// Returns what pager to use, after looking at both config and environment variables.
-pub(crate) fn get_pager(config_pager: Option<&str>) -> Result<Option<Pager>, ParseError> {
+pub(crate) fn get_pager(config_pager: Option<&str>) -> Result<Option<Pager>> {
     let bat_pager = env::var("BAT_PAGER");
     let pager = env::var("PAGER");
 
@@ -111,7 +112,7 @@ pub(crate) fn get_pager(config_pager: Option<&str>) -> Result<Option<Pager>, Par
         _ => ("less", PagerSource::Default),
     };
 
-    let parts = shell_words::split(cmd)?;
+    let parts = shell_words::split(cmd).context("failed to parse pager command")?;
     match parts.split_first() {
         Some((bin, args)) => {
             let kind = PagerKind::from_bin(bin);

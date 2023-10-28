@@ -45,7 +45,10 @@
     ("/var/mail/*", MapTo("Email")),
     ("*.hook", MapTo("INI")),
     ("*.ron", MapTo("Rust")),
-    ("?git/config", MapTo("Git Config")),
-    ("?git/ignore", MapTo("Git Ignore")),
-    ("?git/attributes", MapTo("Git Attributes")),
+    ("**/.config/git/config", MapTo("Git Config")),
+    ("**/.config/git/ignore", MapTo("Git Ignore")),
+    ("**/.config/git/attributes", MapTo("Git Attributes")),
+    ("**/.git/config", MapTo("Git Config")),
+    ("**/.git/ignore", MapTo("Git Ignore")),
+    ("**/.git/attributes", MapTo("Git Attributes")),
 ]

@@ -1,6 +1,5 @@
 use std::env::{self, VarError};
 use std::error::Error as StdError;
-use std::ffi::OsStr;
 use std::fmt::{self, Display};
 use std::io::{self, IoSliceMut, Read};
 use std::mem;
@@ -30,7 +29,7 @@ impl StdError for PathNotUnicode {}
 #[derive(Debug)]
 pub(crate) struct LessOpen {
     child: Option<Child>,
-    close: Vec<String>,
+    close: Option<String>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -49,27 +48,39 @@ fn get_env_var(key: &str) -> Result<Option<String>> {
     }
 }
 
-fn run_script(
-    script: impl AsRef<OsStr>,
-    args: &[impl AsRef<OsStr>],
-    stdin: Stdio,
-    stdout: Stdio,
-) -> io::Result<Child> {
-    Command::new(script.as_ref())
+#[cfg(unix)]
+fn run_script(script: &str, stdin: Stdio, stdout: Stdio) -> Result<Child> {
+    Ok(Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .env_remove("LESSOPEN")
+        .env_remove("LESSCLOSE")
+        .stdin(stdin)
+        .stdout(stdout)
+        .stderr(Stdio::inherit())
+        .spawn()?)
+}
+
+#[cfg(not(unix))]
+fn run_script(script: &str, stdin: Stdio, stdout: Stdio) -> Result<Child> {
+    let all_args = shell_words::split(script)?;
+    let (script, args) = all_args.split_first().unwrap();
+    let script = grep_cli::resolve_binary(script)?;
+    Ok(Command::new(script)
         .args(args)
         .env_remove("LESSOPEN")
         .env_remove("LESSCLOSE")
         .stdin(stdin)
         .stdout(stdout)
         .stderr(Stdio::inherit())
-        .spawn()
+        .spawn()?)
 }
 
 fn make_lessclose(
     mut lessclose: String,
     file_name: &str,
     replacement: &str,
-) -> std::result::Result<Vec<String>, shell_words::ParseError> {
+) -> String {
     let mut iter = lessclose.match_indices("%s").map(|(pos, _)| pos);
     let first = iter.next();
     let second = iter.next();
@@ -79,10 +90,11 @@ fn make_lessclose(
     }
     if let Some(pos) = second {
         debug_assert!(first.is_some());
-        let offset = file_name.len() - 2; // wrapping add
-        lessclose.replace_range((pos + offset)..(pos + offset + 2), replacement);
+        let offset = file_name.len().wrapping_sub(2);
+        let pos = pos.wrapping_add(offset);
+        lessclose.replace_range(pos..(pos + 2), replacement);
     }
-    shell_words::split(lessclose.as_str())
+    lessclose
 }
 
 impl LessOpen {
@@ -128,13 +140,8 @@ impl LessOpen {
             let lessclose = get_env_var("LESSCLOSE")?;
             mem::drop(lessopen_s);
 
-            let all_args = shell_words::split(lessopen.as_str())?;
-            let (script, args) = all_args.split_first().unwrap();
-            let script = grep_cli::resolve_binary(script)?;
-
             let mut child = run_script(
-                script,
-                args,
+                lessopen.as_str(),
                 if let InputKind::StdIn = input.kind {
                     Stdio::inherit()
                 } else {
@@ -160,8 +167,7 @@ impl LessOpen {
                             let close = lessclose
                                 .map(|lessclose| {
                                     make_lessclose(lessclose, file_name, replacement.as_str())
-                                })
-                                .unwrap_or(Ok(Vec::new()))?;
+                                });
                             input.kind = InputKind::OrdinaryFile(replacement.into());
                             Some(LessOpen { child: None, close })
                         }
@@ -176,8 +182,7 @@ impl LessOpen {
                         None
                     } else {
                         let close = lessclose
-                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"))
-                            .unwrap_or(Ok(Vec::new()))?;
+                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"));
                         input.kind = InputKind::CustomReader(Box::new(reader));
                         Some(LessOpen {
                             child: Some(child),
@@ -201,8 +206,7 @@ impl LessOpen {
                         None
                     } else {
                         let close = lessclose
-                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"))
-                            .unwrap_or(Ok(Vec::new()))?;
+                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"));
                         input.kind = InputKind::CustomReader(Box::new(reader));
                         Some(LessOpen {
                             child: Some(child),
@@ -225,12 +229,15 @@ impl Drop for LessOpen {
         }
 
         // call lessclose
-        if !self.close.is_empty() {
-            let (script, args) = self.close.split_first_mut().unwrap();
-            let script = grep_cli::resolve_binary(script.as_str())
-                .unwrap_or_else(|_| mem::take(script).into());
-            _ = run_script(script, args, Stdio::null(), Stdio::null())
-                .and_then(|mut child| child.wait())
+        if let Some(ref lessclose) = self.close {
+            if let Ok(mut child) = run_script(lessclose, Stdio::null(), if cfg!(debug_assertions) {
+                // for testing
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            }) {
+                _ = child.wait();
+            }
         }
     }
 }

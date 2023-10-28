@@ -139,24 +139,10 @@ impl<'a> Controller<'a> {
 
         if self.config.loop_through {
             let mut printer = SimplePrinter::new(self.config);
-            self.print_file(
-                &mut printer,
-                writer,
-                &mut opened_input,
-                !is_first,
-            )
+            self.print_file(&mut printer, writer, &mut opened_input, !is_first)
         } else {
-            let mut printer = InteractivePrinter::new(
-                self.config,
-                self.assets,
-                &mut opened_input,
-            )?;
-            self.print_file(
-                &mut printer,
-                writer,
-                &mut opened_input,
-                !is_first,
-            )
+            let mut printer = InteractivePrinter::new(self.config, self.assets, &mut opened_input)?;
+            self.print_file(&mut printer, writer, &mut opened_input, !is_first)
         }
     }
 

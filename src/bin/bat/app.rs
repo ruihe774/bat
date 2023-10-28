@@ -260,13 +260,13 @@ impl App {
                 })
                 .unwrap_or(None),
             visible_lines: VisibleLines(
-                    self.matches
-                        .get_many::<String>("line-range")
-                        .map(|vs| vs.map(|s| LineRange::parse(s.as_str())).collect())
-                        .transpose()?
-                        .map(LineRanges::from)
-                        .unwrap_or(LineRanges::all()),
-                ),
+                self.matches
+                    .get_many::<String>("line-range")
+                    .map(|vs| vs.map(|s| LineRange::parse(s.as_str())).collect())
+                    .transpose()?
+                    .map(LineRanges::from)
+                    .unwrap_or(LineRanges::all()),
+            ),
             style_components,
             syntax_mapping,
             pager: self.matches.get_one::<String>("pager").map(|s| s.as_str()),

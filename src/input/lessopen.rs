@@ -76,11 +76,7 @@ fn run_script(script: &str, stdin: Stdio, stdout: Stdio) -> Result<Child> {
         .spawn()?)
 }
 
-fn make_lessclose(
-    mut lessclose: String,
-    file_name: &str,
-    replacement: &str,
-) -> String {
+fn make_lessclose(mut lessclose: String, file_name: &str, replacement: &str) -> String {
     let mut iter = lessclose.match_indices("%s").map(|(pos, _)| pos);
     let first = iter.next();
     let second = iter.next();
@@ -164,10 +160,9 @@ impl LessOpen {
                         } else {
                             let replacement = String::from_utf8(stdout)
                                 .context("path returned by lessopen preprocessor is not utf8")?;
-                            let close = lessclose
-                                .map(|lessclose| {
-                                    make_lessclose(lessclose, file_name, replacement.as_str())
-                                });
+                            let close = lessclose.map(|lessclose| {
+                                make_lessclose(lessclose, file_name, replacement.as_str())
+                            });
                             input.kind = InputKind::OrdinaryFile(replacement.into());
                             Some(LessOpen { child: None, close })
                         }
@@ -181,8 +176,8 @@ impl LessOpen {
                     if reader.peek().map(|byte| byte.is_none()).unwrap_or(true) {
                         None
                     } else {
-                        let close = lessclose
-                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"));
+                        let close =
+                            lessclose.map(|lessclose| make_lessclose(lessclose, file_name, "-"));
                         input.kind = InputKind::CustomReader(Box::new(reader));
                         Some(LessOpen {
                             child: Some(child),
@@ -205,8 +200,8 @@ impl LessOpen {
                     {
                         None
                     } else {
-                        let close = lessclose
-                            .map(|lessclose| make_lessclose(lessclose, file_name, "-"));
+                        let close =
+                            lessclose.map(|lessclose| make_lessclose(lessclose, file_name, "-"));
                         input.kind = InputKind::CustomReader(Box::new(reader));
                         Some(LessOpen {
                             child: Some(child),
@@ -230,12 +225,16 @@ impl Drop for LessOpen {
 
         // call lessclose
         if let Some(ref lessclose) = self.close {
-            if let Ok(mut child) = run_script(lessclose, Stdio::null(), if cfg!(debug_assertions) {
-                // for testing
-                Stdio::inherit()
-            } else {
-                Stdio::null()
-            }) {
+            if let Ok(mut child) = run_script(
+                lessclose,
+                Stdio::null(),
+                if cfg!(debug_assertions) {
+                    // for testing
+                    Stdio::inherit()
+                } else {
+                    Stdio::null()
+                },
+            ) {
                 _ = child.wait();
             }
         }

@@ -1,8 +1,7 @@
 use std::io::Write;
 
 use console::AnsiCodeIterator;
-use nu_ansi_term::Color::{Fixed, Yellow};
-use nu_ansi_term::Style;
+use nu_ansi_term::{Color as TermColor, Style};
 use serde::{Deserialize, Serialize};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::Color;
@@ -297,7 +296,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
                     "{}: Binary content from {} will not be printed to the terminal \
                      (but will be present if the output of 'bat' is piped). You can use 'bat -A' \
                      to show the binary file contents.",
-                    Yellow.paint("[bat warning]"),
+                    TermColor::Yellow.paint("[bat warning]"),
                     if &input.description.kind == "File" {
                         format!(
                             "file '{}'",
@@ -708,7 +707,7 @@ impl Colors {
                 // (resulting in the terminal's default foreground color).
                 Some(c) => to_ansi_color(c, true_color),
                 // Otherwise, use a specific fallback color.
-                None => Some(Fixed(DEFAULT_GUTTER_COLOR)),
+                None => Some(TermColor::Fixed(DEFAULT_GUTTER_COLOR)),
             },
             ..Style::default()
         };

@@ -61,7 +61,7 @@ pub fn generate_config_file(config: &Config<'_>) -> bat::error::Result<()> {
                 .open(&config_file)?,
         ),
         config,
-        Default::default(),
+        ron::ser::PrettyConfig::new().extensions(ron::extensions::Extensions::IMPLICIT_SOME),
     )?;
 
     println!("Success! Config file written to {}", config_file.display());

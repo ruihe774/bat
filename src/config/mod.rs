@@ -12,9 +12,11 @@ use crate::printer::WrappingMode;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config<'a> {
     /// The explicitly configured language, if any
+    #[serde(default)]
     pub language: Option<&'a str>,
 
     /// The configured notation for non-printable characters
+    #[serde(default)]
     pub nonprintable_notation: Option<NonprintableNotation>,
 
     /// The character width of the terminal
@@ -44,9 +46,11 @@ pub struct Config<'a> {
     pub paging_mode: PagingMode,
 
     /// Specifies which lines should be printed
+    #[serde(default)]
     pub visible_lines: VisibleLines,
 
     /// The syntax highlighting theme
+    #[serde(default)]
     pub theme: Option<String>,
 
     /// File extension/name mappings
@@ -54,17 +58,24 @@ pub struct Config<'a> {
     pub syntax_mapping: SyntaxMapping<'a>,
 
     /// Command to start the pager
+    #[serde(default)]
     pub pager: Option<&'a str>,
 
     /// Whether or not to use ANSI italics
     pub use_italic_text: bool,
 
     /// Ranges of lines which should be highlighted with a special background color
+    #[serde(default)]
     pub highlighted_lines: HighlightedLineRanges,
 
     // Whether or not to use $LESSOPEN if set
     #[cfg(feature = "lessopen")]
+    #[serde(default = "default_true")]
     pub use_lessopen: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[cfg(all(feature = "minimal-application", feature = "paging"))]

@@ -1,8 +1,8 @@
 use std::env;
 use std::error::Error as StdError;
 use std::ffi::OsStr;
-use std::fmt::{self, Display, Write};
-use std::fs::{self, File, OpenOptions};
+use std::fmt::{self, Display, Write as _};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
@@ -405,6 +405,11 @@ fn load_asset_bytes(
     data: &[u8],
     cache_dir: Option<impl AsRef<Path>>,
 ) -> Result<Vec<u8>> {
+    #[cfg(feature = "zero-copy")]
+    use std::fs::File;
+    #[cfg(not(feature = "zero-copy"))]
+    use std::io::Write;
+
     let mut iter = data
         .rchunks_exact(4)
         .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()));
@@ -455,6 +460,9 @@ fn load_asset_bytes(
                             .create(true)
                             .open(cache_file)?;
                         f.set_len(length.try_into().unwrap())?;
+                        let mut permissions = f.metadata()?.permissions();
+                        permissions.set_readonly(true);
+                        f.set_permissions(permissions)?;
                         unsafe { MmapOptions::new().len(length).populate().map_mut(&f) }
                     },
                 )?;
@@ -470,7 +478,14 @@ fn load_asset_bytes(
                 decoder.read_to_end(&mut buffer)?;
                 if let Some(cache_file) = cache_file {
                     fs::create_dir_all(cache_file.parent().unwrap())?;
-                    fs::write(cache_file, &buffer)?;
+                    let mut f = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .open(cache_file)?;
+                    let mut permissions = f.metadata()?.permissions();
+                    permissions.set_readonly(true);
+                    f.set_permissions(permissions)?;
+                    f.write_all(&buffer)?;
                 }
                 buffer
             });

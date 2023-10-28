@@ -16,12 +16,10 @@ use crate::config::Config;
 use crate::controller::line_range::RangeCheckResult;
 use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
-use decorations::{Decoration, GridBorderDecoration, LineNumberDecoration};
 use preprocessor::{expand_tabs, replace_nonprintable};
 use terminal::{to_ansi_color, to_ansi_style};
 use vscreen::AnsiStyle;
 
-mod decorations;
 pub mod preprocessor;
 pub mod style;
 mod terminal;
@@ -40,23 +38,24 @@ impl Default for WrappingMode {
     }
 }
 
-pub(crate) type OutputHandle<'a> = &'a mut dyn Write;
+#[allow(type_alias_bounds)]
+pub(crate) type OutputHandle<'a, W: Write> = &'a mut W;
 
-pub(crate) trait Printer {
+pub(crate) trait Printer<W: Write> {
     fn print_header(
         &mut self,
-        handle: OutputHandle,
+        handle: OutputHandle<W>,
         input: &OpenedInput,
         add_header_padding: bool,
     ) -> Result<()>;
-    fn print_footer(&mut self, handle: OutputHandle, input: &OpenedInput) -> Result<()>;
+    fn print_footer(&mut self, handle: OutputHandle<W>, input: &OpenedInput) -> Result<()>;
 
-    fn print_snip(&mut self, handle: OutputHandle) -> Result<()>;
+    fn print_snip(&mut self, handle: OutputHandle<W>) -> Result<()>;
 
     fn print_line(
         &mut self,
         out_of_range: bool,
-        handle: OutputHandle,
+        handle: OutputHandle<W>,
         line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()>;
@@ -72,28 +71,28 @@ impl<'a> SimplePrinter<'a> {
     }
 }
 
-impl<'a> Printer for SimplePrinter<'a> {
+impl<'a, W: Write> Printer<W> for SimplePrinter<'a> {
     fn print_header(
         &mut self,
-        _handle: OutputHandle,
+        _handle: OutputHandle<W>,
         _input: &OpenedInput,
         _add_header_padding: bool,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn print_footer(&mut self, _handle: OutputHandle, _input: &OpenedInput) -> Result<()> {
+    fn print_footer(&mut self, _handle: OutputHandle<W>, _input: &OpenedInput) -> Result<()> {
         Ok(())
     }
 
-    fn print_snip(&mut self, _handle: OutputHandle) -> Result<()> {
+    fn print_snip(&mut self, _handle: OutputHandle<W>) -> Result<()> {
         Ok(())
     }
 
     fn print_line(
         &mut self,
         out_of_range: bool,
-        handle: OutputHandle,
+        handle: OutputHandle<W>,
         _line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()> {
@@ -127,12 +126,13 @@ impl<'a> HighlighterFromSet<'a> {
 pub(crate) struct InteractivePrinter<'a> {
     colors: Colors,
     config: &'a Config<'a>,
-    decorations: Vec<Box<dyn Decoration>>,
     panel_width: usize,
     ansi_style: AnsiStyle,
     content_type: Option<ContentType>,
     highlighter_from_set: Option<HighlighterFromSet<'a>>,
     background_color_highlight: Option<Color>,
+    line_number_width: usize,
+    line_number_width_invalid_at: usize,
 }
 
 impl<'a> InteractivePrinter<'a> {
@@ -155,24 +155,10 @@ impl<'a> InteractivePrinter<'a> {
         };
 
         // Create decorations.
-        let mut decorations: Vec<Box<dyn Decoration>> =
-            Self::get_decorations(config, assets, &colors);
-        let mut panel_width: usize =
-            decorations.len() + decorations.iter().fold(0, |a, x| a + x.width());
+        let mut panel_width: usize = Self::get_panel_width(config);
 
-        // The grid border decoration isn't added until after the panel_width calculation, since the
-        // print_horizontal_line, print_header, and print_footer functions all assume the panel
-        // width is without the grid border.
-        if config.style_components.grid() && !decorations.is_empty() {
-            decorations.push(Box::new(GridBorderDecoration::new(&colors)));
-        }
-
-        // Disable the panel if the terminal is too small (i.e. can't fit 5 characters with the
-        // panel showing).
-        if config.term_width
-            < (decorations.len() + decorations.iter().fold(0, |a, x| a + x.width())) + 5
-        {
-            decorations.clear();
+        // Disable the panel if the terminal is too small
+        if config.term_width < panel_width + 7 {
             panel_width = 0;
         }
 
@@ -198,36 +184,28 @@ impl<'a> InteractivePrinter<'a> {
             panel_width,
             colors,
             config,
-            decorations,
             content_type: input.reader.content_type.clone(),
             ansi_style: AnsiStyle::new(),
             highlighter_from_set,
             background_color_highlight,
+            line_number_width: 4,
+            line_number_width_invalid_at: 10000,
         })
     }
 
-    fn get_decorations(
-        config: &Config,
-        _assets: &HighlightingAssets,
-        colors: &Colors,
-    ) -> Vec<Box<dyn Decoration>> {
-        // Create decorations.
-        let mut decorations: Vec<Box<dyn Decoration>> = Vec::new();
-
+    pub(crate) fn get_panel_width(config: &'a Config) -> usize {
         if config.style_components.numbers() {
-            decorations.push(Box::new(LineNumberDecoration::new(colors)));
+            5
+        } else {
+            0
         }
-
-        return decorations;
     }
 
-    pub(crate) fn get_panel_width(config: &'a Config, assets: &'a HighlightingAssets) -> usize {
-        let decorations = Self::get_decorations(config, assets, &Colors::plain());
-
-        return decorations.len() + decorations.iter().fold(0, |a, x| a + x.width());
-    }
-
-    fn print_horizontal_line_term(&self, handle: OutputHandle, style: Style) -> io::Result<()> {
+    fn print_horizontal_line_term<W: Write>(
+        &self,
+        handle: OutputHandle<W>,
+        style: Style,
+    ) -> io::Result<()> {
         write!(handle, "{}", style.prefix())?;
         for _ in 0..self.config.term_width {
             write!(handle, "─")?;
@@ -236,7 +214,11 @@ impl<'a> InteractivePrinter<'a> {
         Ok(())
     }
 
-    fn print_horizontal_line(&self, handle: OutputHandle, grid_char: char) -> io::Result<()> {
+    fn print_horizontal_line<W: Write>(
+        &self,
+        handle: OutputHandle<W>,
+        grid_char: char,
+    ) -> io::Result<()> {
         if self.panel_width == 0 {
             self.print_horizontal_line_term(handle, self.colors.grid)?;
         } else {
@@ -254,7 +236,7 @@ impl<'a> InteractivePrinter<'a> {
         Ok(())
     }
 
-    fn print_header_component_indent(&self, handle: OutputHandle) -> Result<()> {
+    fn print_header_component_indent<W: Write>(&self, handle: OutputHandle<W>) -> io::Result<()> {
         for _ in 0..self.panel_width {
             write!(handle, " ")?;
         }
@@ -270,6 +252,60 @@ impl<'a> InteractivePrinter<'a> {
         Ok(())
     }
 
+    fn print_line_number<W: Write>(
+        &mut self,
+        line_number: usize,
+        continuation: bool,
+        handle: OutputHandle<W>,
+    ) -> io::Result<usize> {
+        if line_number >= self.line_number_width_invalid_at {
+            self.line_number_width += 1;
+            self.line_number_width_invalid_at *= 10;
+        }
+        write!(handle, "{}", self.colors.line_number.prefix())?;
+        if continuation {
+            for _ in 0..self.line_number_width {
+                write!(handle, " ")?;
+            }
+        } else {
+            write!(handle, "{:4}", line_number)?;
+        }
+        write!(handle, "{}", self.colors.line_number.suffix())?;
+        Ok(self.line_number_width)
+    }
+
+    fn print_grid<W: Write>(&mut self, handle: OutputHandle<W>) -> io::Result<usize> {
+        write!(
+            handle,
+            "{}│{}",
+            self.colors.grid.prefix(),
+            self.colors.grid.suffix()
+        )?;
+        Ok(1)
+    }
+
+    fn print_decorations<W: Write>(
+        &mut self,
+        line_number: usize,
+        continuation: bool,
+        handle: OutputHandle<W>,
+    ) -> io::Result<usize> {
+        let mut len = 0;
+        if self.panel_width != 0 {
+            if self.config.style_components.numbers() {
+                len += self.print_line_number(line_number, continuation, handle)?;
+                write!(handle, " ")?;
+                len += 1;
+            }
+            if self.config.style_components.grid() {
+                len += self.print_grid(handle)?;
+                write!(handle, " ")?;
+                len += 1;
+            }
+        }
+        Ok(len)
+    }
+
     fn preprocess<'b>(&self, text: &'b str, cursor: &mut usize) -> Cow<'b, str> {
         if self.config.tab_width != 0 {
             expand_tabs(text, self.config.tab_width, cursor)
@@ -280,10 +316,10 @@ impl<'a> InteractivePrinter<'a> {
     }
 }
 
-impl<'a> Printer for InteractivePrinter<'a> {
+impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
     fn print_header(
         &mut self,
-        handle: OutputHandle,
+        handle: OutputHandle<W>,
         input: &OpenedInput,
         add_header_padding: bool,
     ) -> Result<()> {
@@ -390,7 +426,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
         Ok(())
     }
 
-    fn print_footer(&mut self, handle: OutputHandle, _input: &OpenedInput) -> Result<()> {
+    fn print_footer(&mut self, handle: OutputHandle<W>, _input: &OpenedInput) -> Result<()> {
         if self.config.style_components.grid()
             && (self.content_type.as_ref().map_or(false, |c| c.is_text())
                 || self.config.nonprintable_notation.is_some())
@@ -401,7 +437,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
         }
     }
 
-    fn print_snip(&mut self, handle: OutputHandle) -> Result<()> {
+    fn print_snip(&mut self, handle: OutputHandle<W>) -> Result<()> {
         write!(handle, "{}", self.colors.grid.prefix())?;
 
         let panel_text = " ...";
@@ -444,7 +480,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
     fn print_line(
         &mut self,
         out_of_range: bool,
-        handle: OutputHandle,
+        handle: OutputHandle<W>,
         line_number: usize,
         line_buffer: &[u8],
     ) -> Result<()> {
@@ -511,14 +547,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
             .filter(|_| highlight_this_line);
 
         // Line decorations.
-        if self.panel_width > 0 {
-            for d in self.decorations.iter_mut().map(|d| d.as_mut()) {
-                let len = d.print(line_number, false, handle)?;
-                cursor_max -= len;
-                write!(handle, " ")?;
-                cursor_max -= 1;
-            }
-        }
+        cursor_max -= self.print_decorations(line_number, false, handle)?;
 
         // Line contents.
         let true_color = self.config.true_color;
@@ -627,12 +656,7 @@ impl<'a> Printer for InteractivePrinter<'a> {
                                     // It wraps.
                                     writeln!(handle, "{}", style.suffix())?;
 
-                                    if self.panel_width > 0 {
-                                        for d in self.decorations.iter_mut().map(|d| d.as_mut()) {
-                                            d.print(line_number, true, handle)?;
-                                            write!(handle, " ")?;
-                                        }
-                                    }
+                                    self.print_decorations(line_number, true, handle)?;
 
                                     write!(handle, "{}{}", style.prefix(), &self.ansi_style)?;
 

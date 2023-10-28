@@ -47,66 +47,75 @@ impl<'a> Controller<'a> {
         Controller { config, assets }
     }
 
-    pub fn run(&self, inputs: Vec<Input>, output_buffer: Option<&mut dyn Write>) -> Result<bool> {
-        self.run_with_error_handler(inputs, output_buffer, default_error_handler)
+    pub fn run(&self, inputs: Vec<Input>) -> Result<bool> {
+        self.run_with_options(inputs, Option::<&mut Vec<u8>>::None, default_error_handler)
     }
 
-    pub fn run_with_error_handler(
+    pub fn run_with_options(
         &self,
         inputs: Vec<Input>,
-        output_buffer: Option<&mut dyn Write>,
+        mut output_buffer: Option<&mut impl Write>,
         handle_error: impl Fn(&Error, &mut dyn Write),
     ) -> Result<bool> {
-        let panel_width = if self.config.loop_through {
-            0
-        } else {
-            InteractivePrinter::get_panel_width(self.config, self.assets)
-        };
-
-        let interactive = output_buffer.is_none() && io::stdout().is_terminal();
+        let panel_width = (!self.config.loop_through)
+            .then(|| InteractivePrinter::get_panel_width(self.config))
+            .unwrap_or_default();
 
         #[cfg(feature = "paging")]
-        let mut output_type = OutputType::from_mode(
-            self.config.paging_mode.unwrap_or(if interactive {
-                PagingMode::QuitIfOneScreen
-            } else {
-                PagingMode::Never
-            }),
-            self.config,
-            panel_width,
-        )?;
-
-        #[cfg(not(feature = "paging"))]
-        let mut output_type = OutputType::stdout();
-
-        let attached_to_pager = output_type.is_pager();
-        let stdout_identifier = if attached_to_pager {
-            None
+        let mut output_type = if output_buffer.is_none() {
+            let interactive = io::stdout().is_terminal();
+            Some(OutputType::from_mode(
+                self.config.paging_mode.unwrap_or(if interactive {
+                    PagingMode::QuitIfOneScreen
+                } else {
+                    PagingMode::Never
+                }),
+                self.config,
+                panel_width,
+            )?)
         } else {
-            clircle::Identifier::stdout()
+            None
         };
 
-        let (writer, has_output_buf): (&'_ mut dyn Write, bool) =
-            if let Some(output_buffer) = output_buffer {
-                (output_buffer, true)
-            } else {
-                (output_type.handle(), false)
-            };
+        #[cfg(not(feature = "paging"))]
+        let mut output_type = output_buffer.is_none().then(|| OutputType::stdout());
+
+        let stdout_identifier = (output_buffer.is_none()
+            && !output_type.as_ref().unwrap().is_pager())
+        .then(clircle::Identifier::stdout)
+        .flatten();
+
         let mut no_errors: bool = true;
         let mut stderr = io::stderr();
 
         for (index, input) in inputs.into_iter().enumerate() {
             let identifier = stdout_identifier.as_ref();
             let is_first = index == 0;
-            let result = self.print_input(input, writer, identifier, is_first);
+            let result = match (output_buffer.as_mut(), output_type.as_mut()) {
+                (Some(buffer), None) => self.print_input(input, *buffer, identifier, is_first),
+                (None, Some(output_type)) if output_type.is_pager() => self.print_input(
+                    input,
+                    output_type.pager_handle().unwrap(),
+                    identifier,
+                    is_first,
+                ),
+                (None, Some(output_type)) if output_type.is_stdout() => self.print_input(
+                    input,
+                    output_type.stdout_handle().unwrap(),
+                    identifier,
+                    is_first,
+                ),
+                _ => unreachable!(),
+            };
             if let Err(error) = result {
-                if has_output_buf {
+                if output_buffer.is_some() {
                     // It doesn't make much sense to send errors straight to stderr if the user
                     // provided their own buffer, so we just return it.
                     return Err(error);
                 } else {
-                    if attached_to_pager {
-                        handle_error(&error, writer);
+                    let output_type = output_type.as_mut().unwrap();
+                    if output_type.is_pager() {
+                        handle_error(&error, output_type.pager_handle().unwrap());
                     } else {
                         handle_error(&error, &mut stderr);
                     }
@@ -118,10 +127,10 @@ impl<'a> Controller<'a> {
         Ok(no_errors)
     }
 
-    fn print_input(
+    fn print_input<W: Write>(
         &self,
         input: Input,
-        writer: OutputHandle,
+        writer: OutputHandle<W>,
         stdout_identifier: Option<&Identifier>,
         is_first: bool,
     ) -> Result<()> {
@@ -140,10 +149,10 @@ impl<'a> Controller<'a> {
         }
     }
 
-    fn print_file(
+    fn print_file<W: Write>(
         &self,
-        printer: &mut impl Printer,
-        writer: OutputHandle,
+        printer: &mut impl Printer<W>,
+        writer: OutputHandle<W>,
         input: &mut OpenedInput,
         add_header_padding: bool,
     ) -> Result<()> {
@@ -160,10 +169,10 @@ impl<'a> Controller<'a> {
         Ok(())
     }
 
-    fn print_file_ranges(
+    fn print_file_ranges<W: Write>(
         &self,
-        printer: &mut impl Printer,
-        writer: OutputHandle,
+        printer: &mut impl Printer<W>,
+        writer: OutputHandle<W>,
         reader: &mut InputReader,
         line_ranges: &LineRanges,
     ) -> Result<()> {

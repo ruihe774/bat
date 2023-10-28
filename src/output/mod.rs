@@ -188,12 +188,25 @@ impl OutputType {
         false
     }
 
-    pub fn handle(&mut self) -> &mut dyn Write {
+    pub fn is_stdout(&self) -> bool {
+        matches!(self, OutputType::Stdout(_))
+    }
+
+    pub fn stdout_handle(&mut self) -> Option<&mut impl Write> {
         match self {
-            #[cfg(feature = "paging")]
-            OutputType::Pager(_, handle) => handle.as_mut().unwrap(),
-            OutputType::Stdout(handle) => handle,
+            OutputType::Stdout(handle) => Some(handle),
+            _ => None,
         }
+    }
+
+    pub fn pager_handle(&mut self) -> Option<&mut impl Write> {
+        #[cfg(feature = "paging")]
+        match self {
+            OutputType::Pager(_, handle) => Some(handle.as_mut().unwrap()),
+            _ => None,
+        }
+        #[cfg(not(feature = "paging"))]
+        None
     }
 }
 

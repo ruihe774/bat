@@ -177,7 +177,7 @@ pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<
             )?;
             config.theme = Some(theme.to_string());
             Controller::new(&config, &assets)
-                .run(vec![theme_preview_file()], None)
+                .run(vec![theme_preview_file()])
                 .ok();
             writeln!(stdout)?;
         }
@@ -201,7 +201,7 @@ pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<
 fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> Result<bool> {
     let assets = HighlightingAssets::new(cache_dir)?;
     let controller = Controller::new(config, &assets);
-    controller.run(inputs, None)
+    controller.run(inputs)
 }
 
 #[cfg(feature = "bugreport")]

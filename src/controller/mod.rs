@@ -72,7 +72,6 @@ impl<'a> Controller<'a> {
             } else {
                 PagingMode::Never
             }),
-            self.config.wrapping_mode,
             self.config,
             panel_width,
         )?;

@@ -6,7 +6,6 @@ use std::mem;
 use std::process::{Child, ChildStdin};
 
 use crate::error::*;
-use crate::printer::WrappingMode;
 #[cfg(feature = "paging")]
 use less::{retrieve_less_version, LessVersion};
 use pager::PagingMode;
@@ -46,21 +45,13 @@ pub(crate) enum OutputType {
 
 impl OutputType {
     #[cfg(feature = "paging")]
-    pub fn from_mode(
-        paging_mode: PagingMode,
-        wrapping_mode: WrappingMode,
-        config: &Config,
-        panel_width: usize,
-    ) -> Result<Self> {
+    pub fn from_mode(paging_mode: PagingMode, config: &Config, panel_width: usize) -> Result<Self> {
         Ok(match paging_mode {
-            PagingMode::Always => OutputType::try_pager(
-                SingleScreenAction::Nothing,
-                wrapping_mode,
-                config,
-                panel_width,
-            )?,
+            PagingMode::Always => {
+                OutputType::try_pager(SingleScreenAction::Nothing, config, panel_width)?
+            }
             PagingMode::QuitIfOneScreen => {
-                OutputType::try_pager(SingleScreenAction::Quit, wrapping_mode, config, panel_width)?
+                OutputType::try_pager(SingleScreenAction::Quit, config, panel_width)?
             }
             _ => OutputType::stdout(),
         })
@@ -70,7 +61,6 @@ impl OutputType {
     #[cfg(feature = "paging")]
     fn try_pager(
         single_screen_action: SingleScreenAction,
-        wrapping_mode: WrappingMode,
         config: &Config,
         panel_width: usize,
     ) -> Result<Self> {
@@ -119,10 +109,6 @@ impl OutputType {
                     p.arg("-F"); // Short version of --quit-if-one-screen for compatibility
                 }
 
-                if wrapping_mode == WrappingMode::NoWrapping(true) {
-                    p.arg("-S"); // Short version of --chop-long-lines for compatibility
-                }
-
                 // Passing '--no-init' fixes a bug with '--quit-if-one-screen' in older
                 // versions of 'less'. Unfortunately, it also breaks mouse-wheel support.
                 //
@@ -143,31 +129,15 @@ impl OutputType {
             p.env("LESSCHARSET", "UTF-8");
 
             if less_version >= 600 {
-                let mut row_header = 0;
                 let mut col_header = 0;
-                let have_grid = config.style_components.grid();
                 let have_numbers = config.style_components.numbers();
-                let have_header_filename = config.style_components.header_filename();
-
-                if have_grid {
-                    // for top line
-                    row_header += 1;
-                }
-
-                if have_header_filename {
-                    row_header += 1;
-                    if have_grid {
-                        // for bottom line
-                        row_header += 1;
-                    }
-                }
 
                 if have_numbers && panel_width > 0 {
                     col_header += panel_width;
                 }
 
-                if row_header > 0 || col_header > 0 {
-                    let header_args = format!("{row_header},{col_header}");
+                if col_header > 0 {
+                    let header_args = format!("0,{col_header}");
                     p.args(vec!["--header", &header_args]);
                     p.arg("--no-search-headers");
                 }

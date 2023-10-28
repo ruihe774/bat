@@ -1,6 +1,7 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Write};
 
 // Wrapper to avoid unnecessary branching when input doesn't have ANSI escape sequences.
+#[derive(Debug, Clone)]
 pub struct AnsiStyle {
     attributes: Option<Attributes>,
 }
@@ -22,7 +23,7 @@ impl AnsiStyle {
 }
 
 impl Display for AnsiStyle {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.attributes {
             Some(ref a) => a.fmt(f),
             None => Ok(()),
@@ -30,6 +31,7 @@ impl Display for AnsiStyle {
     }
 }
 
+#[derive(Debug, Clone)]
 struct Attributes {
     foreground: String,
     background: String,
@@ -66,32 +68,30 @@ struct Attributes {
 impl Attributes {
     pub fn new() -> Self {
         Attributes {
-            foreground: "".to_owned(),
-            background: "".to_owned(),
-            underlined: "".to_owned(),
-            charset: "".to_owned(),
-            unknown_buffer: "".to_owned(),
-            bold: "".to_owned(),
-            dim: "".to_owned(),
-            underline: "".to_owned(),
-            italic: "".to_owned(),
-            strike: "".to_owned(),
+            foreground: String::new(),
+            background: String::new(),
+            underlined: String::new(),
+            charset: String::new(),
+            unknown_buffer: String::new(),
+            bold: String::new(),
+            dim: String::new(),
+            underline: String::new(),
+            italic: String::new(),
+            strike: String::new(),
         }
     }
 
     /// Update the attributes with an escape sequence.
     /// Returns `false` if the sequence is unsupported.
     pub fn update(&mut self, sequence: &str) -> bool {
-        let mut chars = sequence.char_indices().skip(1);
-
-        if let Some((_, t)) = chars.next() {
+        if let Some(t) = sequence.bytes().nth(1) {
             match t {
-                '(' => self.update_with_charset('(', chars.map(|(_, c)| c)),
-                ')' => self.update_with_charset(')', chars.map(|(_, c)| c)),
-                '[' => {
-                    if let Some((i, last)) = chars.last() {
+                b'(' => self.update_with_charset('(', &sequence[2..]),
+                b')' => self.update_with_charset(')', &sequence[2..]),
+                b'[' => {
+                    if let Some(last) = sequence[2..].bytes().last() {
                         // SAFETY: Always starts with ^[ and ends with m.
-                        self.update_with_csi(last, &sequence[2..i])
+                        self.update_with_csi(last, &sequence[2..(sequence.len() - 1)])
                     } else {
                         false
                     }
@@ -124,21 +124,48 @@ impl Attributes {
         while let Some(p) = iter.next() {
             match p {
                 0 => self.sgr_reset(),
-                1 => self.bold = format!("\x1B[{}m", parameters),
-                2 => self.dim = format!("\x1B[{}m", parameters),
-                3 => self.italic = format!("\x1B[{}m", parameters),
-                4 => self.underline = format!("\x1B[{}m", parameters),
+                1 => {
+                    self.bold.clear();
+                    write!(self.bold, "\x1B[{}m", parameters).unwrap();
+                }
+                2 => {
+                    self.dim.clear();
+                    write!(self.dim, "\x1B[{}m", parameters).unwrap();
+                }
+                3 => {
+                    self.italic.clear();
+                    write!(self.italic, "\x1B[{}m", parameters).unwrap();
+                }
+                4 => {
+                    self.underline.clear();
+                    write!(self.underline, "\x1B[{}m", parameters).unwrap();
+                }
                 23 => self.italic.clear(),
                 24 => self.underline.clear(),
                 22 => {
                     self.bold.clear();
                     self.dim.clear();
                 }
-                30..=39 => self.foreground = Self::parse_color(p, &mut iter),
-                40..=49 => self.background = Self::parse_color(p, &mut iter),
-                58..=59 => self.underlined = Self::parse_color(p, &mut iter),
-                90..=97 => self.foreground = Self::parse_color(p, &mut iter),
-                100..=107 => self.foreground = Self::parse_color(p, &mut iter),
+                30..=39 => {
+                    self.foreground.clear();
+                    Self::parse_color(&mut self.foreground, p, &mut iter);
+                }
+                40..=49 => {
+                    self.background.clear();
+                    Self::parse_color(&mut self.background, p, &mut iter);
+                }
+                58..=59 => {
+                    self.underlined.clear();
+                    Self::parse_color(&mut self.underlined, p, &mut iter);
+                }
+                90..=97 => {
+                    self.foreground.clear();
+                    Self::parse_color(&mut self.foreground, p, &mut iter);
+                }
+                100..=107 => {
+                    self.foreground.clear();
+                    Self::parse_color(&mut self.foreground, p, &mut iter);
+                }
                 _ => {
                     // Unsupported SGR sequence.
                     // Be compatible and pretend one just wasn't was provided.
@@ -149,8 +176,8 @@ impl Attributes {
         true
     }
 
-    fn update_with_csi(&mut self, finalizer: char, sequence: &str) -> bool {
-        if finalizer == 'm' {
+    fn update_with_csi(&mut self, finalizer: u8, sequence: &str) -> bool {
+        if finalizer == b'm' {
             self.update_with_sgr(sequence)
         } else {
             false
@@ -162,27 +189,40 @@ impl Attributes {
         false
     }
 
-    fn update_with_charset(&mut self, kind: char, set: impl Iterator<Item = char>) -> bool {
-        self.charset = format!("\x1B{}{}", kind, set.take(1).collect::<String>());
+    fn update_with_charset(&mut self, kind: char, set: &str) -> bool {
+        self.charset.clear();
+        write!(self.charset, "\x1B{}{}", kind, &set[..set.len().min(1)]).unwrap();
         true
     }
 
-    fn parse_color(color: u16, parameters: &mut dyn Iterator<Item = u16>) -> String {
+    fn parse_color(out: &mut String, color: u16, parameters: &mut impl Iterator<Item = u16>) -> () {
         match color % 10 {
             8 => match parameters.next() {
-                Some(5) /* 256-color */ => format!("\x1B[{};5;{}m", color, join(";", 1, parameters)),
-                Some(2) /* 24-bit color */ => format!("\x1B[{};2;{}m", color, join(";", 3, parameters)),
-                Some(c) => format!("\x1B[{};{}m", color, c),
-                _ => "".to_owned(),
+                Some(5) /* 256-color */ => {
+                    write!(out, "\x1B[{};5", color).unwrap();
+                    if let Some(value) = parameters.next() {
+                        write!(out, ";{}", value).unwrap();
+                    }
+                    write!(out, "m").unwrap();
+                },
+                Some(2) /* 24-bit color */ => {
+                    write!(out, "\x1B[{};2", color).unwrap();
+                    for value in parameters.take(3) {
+                        write!(out, ";{}", value).unwrap();
+                    }
+                    write!(out, "m").unwrap();
+                },
+                Some(c) => write!(out, "\x1B[{};{}m", color, c).unwrap(),
+                _ => (),
             },
-            9 => "".to_owned(),
-            _ => format!("\x1B[{}m", color),
+            9 => (),
+            _ => write!(out, "\x1B[{}m", color).unwrap(),
         }
     }
 }
 
 impl Display for Attributes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}{}{}{}{}{}{}{}{}",
@@ -197,16 +237,4 @@ impl Display for Attributes {
             self.strike,
         )
     }
-}
-
-fn join(
-    delimiter: &str,
-    limit: usize,
-    iterator: &mut dyn Iterator<Item = impl ToString>,
-) -> String {
-    iterator
-        .take(limit)
-        .map(|i| i.to_string())
-        .collect::<Vec<String>>()
-        .join(delimiter)
 }

@@ -110,7 +110,7 @@ pub struct HighlightingAssets {
 #[derive(Debug, Copy, Clone)]
 pub struct SyntaxReferenceInSet<'a> {
     pub syntax: &'a SyntaxReference,
-    pub(crate) syntax_set: &'a SyntaxSet,
+    pub syntax_set: &'a SyntaxSet,
 }
 
 impl HighlightingAssets {

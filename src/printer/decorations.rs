@@ -1,98 +1,88 @@
-use crate::printer::{Colors, InteractivePrinter};
+use std::io;
+
+use crate::printer::Colors;
 use nu_ansi_term::Style;
 
-#[derive(Debug, Clone)]
-pub(crate) struct DecorationText {
-    pub width: usize,
-    pub text: String,
-}
+use super::OutputHandle;
 
 pub(crate) trait Decoration {
-    fn generate(
-        &self,
+    fn print(
+        &mut self,
         line_number: usize,
         continuation: bool,
-        printer: &InteractivePrinter,
-    ) -> DecorationText;
+        handle: OutputHandle,
+    ) -> io::Result<usize>;
     fn width(&self) -> usize;
 }
 
+#[derive(Debug)]
 pub(crate) struct LineNumberDecoration {
     color: Style,
-    cached_wrap: DecorationText,
-    cached_wrap_invalid_at: usize,
+    cached_width: usize,
+    cached_width_invalid_at: usize,
 }
 
 impl LineNumberDecoration {
     pub(crate) fn new(colors: &Colors) -> Self {
         LineNumberDecoration {
             color: colors.line_number,
-            cached_wrap_invalid_at: 10000,
-            cached_wrap: DecorationText {
-                text: colors.line_number.paint(" ".repeat(4)).to_string(),
-                width: 4,
-            },
+            cached_width: 4,
+            cached_width_invalid_at: 10000,
         }
     }
 }
 
 impl Decoration for LineNumberDecoration {
-    fn generate(
-        &self,
+    fn print(
+        &mut self,
         line_number: usize,
         continuation: bool,
-        _printer: &InteractivePrinter,
-    ) -> DecorationText {
-        if continuation {
-            if line_number > self.cached_wrap_invalid_at {
-                let new_width = self.cached_wrap.width + 1;
-                return DecorationText {
-                    text: self.color.paint(" ".repeat(new_width)).to_string(),
-                    width: new_width,
-                };
-            }
-
-            self.cached_wrap.clone()
-        } else {
-            let plain: String = format!("{:4}", line_number);
-            DecorationText {
-                width: plain.len(),
-                text: self.color.paint(plain).to_string(),
-            }
+        handle: OutputHandle,
+    ) -> io::Result<usize> {
+        if line_number >= self.cached_width_invalid_at {
+            self.cached_width += 1;
+            self.cached_width_invalid_at *= 10;
         }
+        write!(handle, "{}", self.color.prefix())?;
+        if continuation {
+            for _ in 0..self.cached_width {
+                write!(handle, " ")?;
+            }
+        } else {
+            write!(handle, "{:4}", line_number)?;
+        }
+        write!(handle, "{}", self.color.suffix())?;
+        Ok(self.cached_width)
     }
 
     fn width(&self) -> usize {
-        4
+        self.cached_width
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct GridBorderDecoration {
-    cached: DecorationText,
+    color: Style,
 }
 
 impl GridBorderDecoration {
     pub(crate) fn new(colors: &Colors) -> Self {
-        GridBorderDecoration {
-            cached: DecorationText {
-                text: colors.grid.paint("│").to_string(),
-                width: 1,
-            },
-        }
+        GridBorderDecoration { color: colors.grid }
     }
 }
 
 impl Decoration for GridBorderDecoration {
-    fn generate(
-        &self,
+    fn print(
+        &mut self,
         _line_number: usize,
         _continuation: bool,
-        _printer: &InteractivePrinter,
-    ) -> DecorationText {
-        self.cached.clone()
+        handle: OutputHandle,
+    ) -> io::Result<usize> {
+        write!(handle, "{}│{}", self.color.prefix(), self.color.suffix())?;
+        Ok(1)
     }
 
     fn width(&self) -> usize {
-        self.cached.width
+        1
     }
 }

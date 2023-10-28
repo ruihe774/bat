@@ -171,10 +171,10 @@ impl<'a> Controller<'a> {
         for line_number in 1.. {
             let range_check = line_ranges.check(line_number);
             if range_check == RangeCheckResult::AfterLastRange {
-                break
+                break;
             }
             if !reader.read_line(&mut line_buffer)? {
-                break
+                break;
             }
 
             match line_ranges.check(line_number) {
@@ -199,7 +199,7 @@ impl<'a> Controller<'a> {
                     printer.print_line(false, writer, line_number, &line_buffer)?;
                 }
 
-                RangeCheckResult::AfterLastRange => unreachable!()
+                RangeCheckResult::AfterLastRange => unreachable!(),
             }
 
             line_buffer.clear();

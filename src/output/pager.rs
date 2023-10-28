@@ -2,8 +2,8 @@ use std::env;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::*;
 use crate::config::get_env_var;
+use crate::error::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PagingMode {

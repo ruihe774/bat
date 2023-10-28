@@ -1,4 +1,4 @@
-use std::env::{VarError, self};
+use std::env::{self, VarError};
 
 use serde::{Deserialize, Serialize};
 

@@ -1,3 +1,4 @@
+use std::io;
 use std::io::Write;
 
 use console::AnsiCodeIterator;
@@ -208,57 +209,45 @@ impl<'a> InteractivePrinter<'a> {
         })
     }
 
-    fn print_horizontal_line_term(&mut self, handle: OutputHandle, style: Style) -> Result<()> {
-        writeln!(
-            handle,
-            "{}",
-            style.paint("─".repeat(self.config.term_width))
-        )?;
+    fn print_horizontal_line_term(&self, handle: OutputHandle, style: Style) -> io::Result<()> {
+        write!(handle, "{}", style.prefix())?;
+        for _ in 0..self.config.term_width {
+            write!(handle, "─")?;
+        }
+        writeln!(handle, "{}", style.suffix())?;
         Ok(())
     }
 
-    fn print_horizontal_line(&mut self, handle: OutputHandle, grid_char: char) -> Result<()> {
+    fn print_horizontal_line(&self, handle: OutputHandle, grid_char: char) -> io::Result<()> {
         if self.panel_width == 0 {
             self.print_horizontal_line_term(handle, self.colors.grid)?;
         } else {
-            let hline = "─".repeat(self.config.term_width - (self.panel_width + 1));
-            let hline = format!("{}{}{}", "─".repeat(self.panel_width), grid_char, hline);
-            writeln!(handle, "{}", self.colors.grid.paint(hline))?;
+            write!(handle, "{}", self.colors.grid.prefix())?;
+            for _ in 0..self.panel_width {
+                write!(handle, "─")?;
+            }
+            write!(handle, "{}", grid_char)?;
+            for _ in 0..(self.config.term_width - (self.panel_width + 1)) {
+                write!(handle, "─")?;
+            }
+            writeln!(handle, "{}", self.colors.grid.suffix())?;
         }
 
         Ok(())
     }
 
-    fn create_fake_panel(&self, text: &str) -> String {
-        if self.panel_width == 0 {
-            return "".to_string();
+    fn print_header_component_indent(&self, handle: OutputHandle) -> Result<()> {
+        for _ in 0..self.panel_width {
+            write!(handle, " ")?;
         }
-
-        let text_truncated: String = text.chars().take(self.panel_width - 1).collect();
-        let text_filled: String = format!(
-            "{}{}",
-            text_truncated,
-            " ".repeat(self.panel_width - 1 - text_truncated.len())
-        );
-        if self.config.style_components.grid() {
-            format!("{} │ ", text_filled)
-        } else {
-            text_filled
-        }
-    }
-
-    fn print_header_component_indent(&mut self, handle: OutputHandle) -> Result<()> {
         if self.config.style_components.grid() {
             write!(
                 handle,
-                "{}{}",
-                " ".repeat(self.panel_width),
-                self.colors
-                    .grid
-                    .paint(if self.panel_width > 0 { "│ " } else { "" }),
-            )?
-        } else {
-            write!(handle, "{}", " ".repeat(self.panel_width))?
+                "{}{}{}",
+                self.colors.grid.prefix(),
+                if self.panel_width > 0 { "│ " } else { "" },
+                self.colors.grid.suffix(),
+            )?;
         }
         Ok(())
     }
@@ -318,19 +307,6 @@ impl<'a> Printer for InteractivePrinter<'a> {
             return Ok(());
         }
 
-        let mode = match self.content_type {
-            Some(ContentType::Binary(None)) => "   <BINARY>".to_owned(),
-            Some(ContentType::Binary(Some(ref binary_type))) => {
-                format!("   <BINARY> {}", binary_type)
-            }
-            Some(ContentType::UTF_16LE) => "   <UTF-16LE>".to_owned(),
-            Some(ContentType::UTF_16BE) => "   <UTF-16BE>".to_owned(),
-            Some(ContentType::UTF_32LE) => "   <UTF-32LE>".to_owned(),
-            Some(ContentType::UTF_32BE) => "   <UTF-32BE>".to_owned(),
-            None => "   <EMPTY>".to_owned(),
-            Some(ContentType::UTF_8) => String::new(),
-        };
-
         let description = &input.description;
 
         // Print the cornering grid before the first header component
@@ -345,24 +321,42 @@ impl<'a> Printer for InteractivePrinter<'a> {
 
         self.print_header_component_indent(handle)?;
         if self.config.style_components.header_filename() {
-            writeln!(
+            if let Some(name) = description.name.as_ref() {
+                write!(
+                    handle,
+                    "{}: {}{}{}",
+                    description.kind.as_str(),
+                    self.colors.header_value.prefix(),
+                    name.to_string_lossy(),
+                    self.colors.header_value.suffix()
+                )?;
+            } else {
+                write!(
+                    handle,
+                    "{}{}{}",
+                    self.colors.header_value.prefix(),
+                    description.kind.as_str(),
+                    self.colors.header_value.suffix()
+                )?;
+            }
+            write!(
                 handle,
-                "{}{}{}{}",
-                if description.name.is_some() {
-                    &description.kind
-                } else {
-                    ""
+                "{}",
+                match self.content_type {
+                    Some(ContentType::Binary(_)) => "   <BINARY>",
+                    Some(ContentType::UTF_16LE) => "   <UTF-16LE>",
+                    Some(ContentType::UTF_16BE) => "   <UTF-16BE>",
+                    Some(ContentType::UTF_32LE) => "   <UTF-32LE>",
+                    Some(ContentType::UTF_32BE) => "   <UTF-32BE>",
+                    Some(ContentType::UTF_8) => "",
+                    None => "   <EMPTY>",
                 },
-                if description.name.is_some() { ": " } else { "" },
-                self.colors.header_value.paint(
-                    description
-                        .name
-                        .as_ref()
-                        .map(|s| s.to_string_lossy())
-                        .unwrap_or(description.kind.as_str().into())
-                ),
-                mode
             )?;
+            if let Some(ContentType::Binary(Some(ref binary_type))) = self.content_type {
+                writeln!(handle, " {}", binary_type)?;
+            } else {
+                writeln!(handle, "")?;
+            }
         };
 
         if self.config.style_components.grid() {
@@ -383,32 +377,48 @@ impl<'a> Printer for InteractivePrinter<'a> {
             && (self.content_type.as_ref().map_or(false, |c| c.is_text())
                 || self.config.nonprintable_notation.is_some())
         {
-            self.print_horizontal_line(handle, '┴')
+            Ok(self.print_horizontal_line(handle, '┴')?)
         } else {
             Ok(())
         }
     }
 
     fn print_snip(&mut self, handle: OutputHandle) -> Result<()> {
-        let panel = self.create_fake_panel(" ...");
-        let panel_count = panel.chars().count();
+        write!(handle, "{}", self.colors.grid.prefix())?;
+
+        let panel_text = " ...";
+        let panel_count = if self.panel_width != 0 {
+            let text_truncated = &panel_text[..(self.panel_width - 1)];
+            write!(handle, "{}", text_truncated)?;
+            for _ in 0..(self.panel_width - 1 - text_truncated.len()) {
+                write!(handle, " ")?;
+            }
+            if self.config.style_components.grid() {
+                write!(handle, " │ ")?;
+                self.panel_width + 2
+            } else {
+                self.panel_width - 1
+            }
+        } else {
+            0
+        };
 
         let title = "8<";
-        let title_count = title.chars().count();
+        let title_count = 2;
 
-        let snip_left = "─ ".repeat((self.config.term_width - panel_count - (title_count / 2)) / 4);
-        let snip_left_count = snip_left.chars().count(); // Can't use .len() with Unicode.
+        let snip_left_count = (self.config.term_width - panel_count - (title_count / 2)) / 4;
+        for _ in 0..snip_left_count {
+            write!(handle, "─ ")?;
+        }
+        let snip_left_count = snip_left_count * 2;
 
-        let snip_right =
-            " ─".repeat((self.config.term_width - panel_count - snip_left_count - title_count) / 2);
+        write!(handle, "{}", title)?;
 
-        writeln!(
-            handle,
-            "{}",
-            self.colors
-                .grid
-                .paint(format!("{}{}{}{}", panel, snip_left, title, snip_right))
-        )?;
+        for _ in 0..((self.config.term_width - panel_count - snip_left_count - title_count) / 2) {
+            write!(handle, " ─")?;
+        }
+
+        writeln!(handle, "{}", self.colors.grid.suffix())?;
 
         Ok(())
     }
@@ -436,13 +446,11 @@ impl<'a> Printer for InteractivePrinter<'a> {
         let regions = {
             let highlighter_from_set = match self.highlighter_from_set {
                 Some(ref mut highlighter_from_set) => highlighter_from_set,
-                _ => {
-                    return Ok(());
-                }
+                _ => return Ok(()),
             };
 
             // skip syntax highlighting on long lines
-            let too_long = line.len() > 1024 * 16;
+            let too_long = line.len() > 8192;
 
             let for_highlighting: &str = if too_long { "\n" } else { &line };
 
@@ -464,7 +472,6 @@ impl<'a> Printer for InteractivePrinter<'a> {
         let mut cursor: usize = 0;
         let mut cursor_max: usize = self.config.term_width;
         let mut cursor_total: usize = 0;
-        let mut panel_wrap: Option<String> = None;
 
         // Line highlighting
         let highlight_this_line =
@@ -487,14 +494,11 @@ impl<'a> Printer for InteractivePrinter<'a> {
 
         // Line decorations.
         if self.panel_width > 0 {
-            let decorations = self
-                .decorations
-                .iter()
-                .map(|d| d.generate(line_number, false, self));
-
-            for deco in decorations {
-                write!(handle, "{} ", deco.text)?;
-                cursor_max -= deco.width + 1;
+            for d in self.decorations.iter_mut().map(|d| d.as_mut()) {
+                let len = d.print(line_number, false, handle)?;
+                cursor_max -= len;
+                write!(handle, " ")?;
+                cursor_max -= 1;
             }
         }
 
@@ -590,28 +594,10 @@ impl<'a> Printer for InteractivePrinter<'a> {
                                 // if next character cannot be printed on this line,
                                 // flush the buffer.
                                 if current_width > max_width {
-                                    // Generate wrap padding if not already generated.
-                                    if panel_wrap.is_none() {
-                                        panel_wrap = if self.panel_width > 0 {
-                                            Some(format!(
-                                                "{} ",
-                                                self.decorations
-                                                    .iter()
-                                                    .map(|d| d
-                                                        .generate(line_number, true, self)
-                                                        .text)
-                                                    .collect::<Vec<String>>()
-                                                    .join(" ")
-                                            ))
-                                        } else {
-                                            Some("".to_string())
-                                        }
-                                    }
-
                                     // It wraps.
                                     write!(
                                         handle,
-                                        "{}\n{}",
+                                        "{}\n",
                                         as_terminal_escaped(
                                             style,
                                             &format!("{}{}", self.ansi_style, line_buf),
@@ -619,9 +605,15 @@ impl<'a> Printer for InteractivePrinter<'a> {
                                             self.config.colored_output,
                                             self.config.use_italic_text,
                                             background_color
-                                        ),
-                                        panel_wrap.clone().unwrap()
+                                        )
                                     )?;
+
+                                    if self.panel_width > 0 {
+                                        for d in self.decorations.iter_mut().map(|d| d.as_mut()) {
+                                            d.print(line_number, true, handle)?;
+                                            write!(handle, " ")?;
+                                        }
+                                    }
 
                                     cursor = 0;
                                     max_width = cursor_max;

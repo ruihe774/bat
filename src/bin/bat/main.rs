@@ -7,12 +7,13 @@ mod directories;
 mod input;
 
 use std::fmt::Write as _;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::process;
 
 use bat::assets::HighlightingAssets;
-use bat::controller::default_error_handler;
+use bat::controller::{default_error_handler, ErrorHandling};
+use bat::raise_error;
 use nu_ansi_term::Color::Green;
 use nu_ansi_term::Style;
 
@@ -176,9 +177,7 @@ pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<
                 Style::new().bold().paint(theme.to_string())
             )?;
             config.theme = Some(theme.to_string());
-            Controller::new(&config, &assets)
-                .run(vec![theme_preview_file()])
-                .ok();
+            _ = Controller::new(&config, &assets).run(vec![theme_preview_file()]);
             writeln!(stdout)?;
         }
         writeln!(
@@ -198,8 +197,8 @@ pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<
     Ok(())
 }
 
-fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> Result<bool> {
-    let assets = HighlightingAssets::new(cache_dir)?;
+fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> ErrorHandling {
+    let assets = raise_error!(HighlightingAssets::new(cache_dir));
     let controller = Controller::new(config, &assets);
     controller.run(inputs)
 }
@@ -258,8 +257,8 @@ fn invoke_bugreport(app: &App, cache_dir: &Path) {
 
 /// Returns `Err(..)` upon fatal errors. Otherwise, returns `Ok(true)` on full success and
 /// `Ok(false)` if any intermediate errors occurred (were printed).
-fn run() -> Result<bool> {
-    let app = App::new()?;
+fn run() -> ErrorHandling {
+    let app = raise_error!(App::new());
     let config_dir = PROJECT_DIRS.config_dir();
     let cache_dir = PROJECT_DIRS.cache_dir();
 
@@ -268,7 +267,7 @@ fn run() -> Result<bool> {
         invoke_bugreport(&app, cache_dir);
         #[cfg(not(feature = "bugreport"))]
         println!("bat has been built without the 'bugreport' feature. The '--diagnostic' option is not available.");
-        return Ok(true);
+        return ErrorHandling::NoError;
     }
 
     match app.matches.subcommand() {
@@ -288,11 +287,11 @@ fn run() -> Result<bool> {
             }
         }
         _ => {
-            let inputs = app.inputs()?;
-            let config = app.config(&inputs)?;
+            let inputs = raise_error!(app.inputs());
+            let config = raise_error!(app.config(&inputs));
 
             if app.matches.get_flag("list-languages") {
-                let languages: String = get_languages(&config, cache_dir)?;
+                let languages: String = raise_error!(get_languages(&config, cache_dir));
                 let inputs: Vec<Input> = vec![Input::from_reader(io::Cursor::<Vec<u8>>::new(
                     languages.into(),
                 ))];
@@ -303,23 +302,27 @@ fn run() -> Result<bool> {
                 };
                 run_controller(inputs, &plain_config, cache_dir)
             } else if app.matches.get_flag("list-themes") {
-                list_themes(&config, config_dir, cache_dir)?;
-                Ok(true)
+                raise_error!(list_themes(&config, config_dir, cache_dir));
+                ErrorHandling::NoError
             } else if app.matches.get_flag("config-file") {
                 println!("{}", config_file_path().to_string_lossy());
-                Ok(true)
+                ErrorHandling::NoError
             } else if app.matches.get_flag("generate-config-file") {
-                generate_config_file(&config)?;
-                Ok(true)
+                raise_error!(generate_config_file(&config));
+                ErrorHandling::NoError
             } else if app.matches.get_flag("config-dir") {
-                writeln!(io::stdout(), "{}", config_dir.to_string_lossy())?;
-                Ok(true)
+                raise_error!(writeln!(io::stdout(), "{}", config_dir.to_string_lossy()));
+                ErrorHandling::NoError
             } else if app.matches.get_flag("cache-dir") {
-                writeln!(io::stdout(), "{}", cache_dir.to_string_lossy())?;
-                Ok(true)
+                raise_error!(writeln!(io::stdout(), "{}", cache_dir.to_string_lossy()));
+                ErrorHandling::NoError
             } else if app.matches.get_flag("acknowledgements") {
-                writeln!(io::stdout(), "{}", bat::assets::get_acknowledgements())?;
-                Ok(true)
+                raise_error!(writeln!(
+                    io::stdout(),
+                    "{}",
+                    bat::assets::get_acknowledgements()
+                ));
+                ErrorHandling::NoError
             } else {
                 run_controller(inputs, &config, cache_dir)
             }
@@ -327,20 +330,23 @@ fn run() -> Result<bool> {
     }
 }
 
-fn main() {
-    let result = run();
+fn handle_result(result: ErrorHandling) -> ! {
+    process::exit(match result {
+        ErrorHandling::NoError | ErrorHandling::SilentFail => 0,
+        ErrorHandling::Handled => 1,
+        ErrorHandling::Raised(error) => {
+            let mut stderr = io::stderr();
+            let is_terminal = stderr.is_terminal();
+            let new_result = default_error_handler(error, &mut stderr, is_terminal);
+            assert!(
+                !matches!(new_result, ErrorHandling::Raised(_)),
+                "default error handler cannot raise error"
+            );
+            handle_result(new_result);
+        }
+    })
+}
 
-    match result {
-        Err(error) => {
-            let stderr = std::io::stderr();
-            default_error_handler(&error, &mut stderr.lock());
-            process::exit(1);
-        }
-        Ok(false) => {
-            process::exit(1);
-        }
-        Ok(true) => {
-            process::exit(0);
-        }
-    }
+fn main() {
+    handle_result(run());
 }

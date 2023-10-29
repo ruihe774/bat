@@ -194,11 +194,7 @@ impl<'a> InteractivePrinter<'a> {
         }
     }
 
-    fn print_horizontal_line_term<W: Write>(
-        &self,
-        handle: &mut W,
-        style: Style,
-    ) -> io::Result<()> {
+    fn print_horizontal_line_term<W: Write>(&self, handle: &mut W, style: Style) -> io::Result<()> {
         write!(handle, "{}", style.prefix())?;
         for _ in 0..self.config.term_width {
             write!(handle, "─")?;
@@ -207,11 +203,7 @@ impl<'a> InteractivePrinter<'a> {
         Ok(())
     }
 
-    fn print_horizontal_line<W: Write>(
-        &self,
-        handle: &mut W,
-        grid_char: char,
-    ) -> io::Result<()> {
+    fn print_horizontal_line<W: Write>(&self, handle: &mut W, grid_char: char) -> io::Result<()> {
         if self.panel_width == 0 {
             self.print_horizontal_line_term(handle, self.colors.grid)?;
         } else {

@@ -1,8 +1,7 @@
 use std::io::{self, IsTerminal, Write};
-use std::process;
 
 use clircle::{Clircle, Identifier};
-use nu_ansi_term::Color;
+use nu_ansi_term::{Color, Style};
 
 use crate::assets::HighlightingAssets;
 use crate::config::Config;
@@ -16,19 +15,57 @@ use line_range::{LineRanges, RangeCheckResult};
 
 pub mod line_range;
 
-pub struct Controller<'a> {
-    config: &'a Config<'a>,
-    assets: &'a HighlightingAssets,
+#[derive(Debug)]
+#[must_use]
+pub enum ErrorHandling {
+    NoError,
+    Handled,
+    Raised(Error),
+    SilentFail,
 }
 
-pub fn default_error_handler(error: &Error, output: &mut dyn Write) {
-    if let Some(io_error) = error.downcast_ref::<io::Error>() {
-        if io_error.kind() == io::ErrorKind::BrokenPipe {
-            process::exit(0);
+#[macro_export]
+macro_rules! raise_error {
+    ($expr:expr $(,)?) => {{
+        use $crate::controller::ErrorHandling;
+        match $expr {
+            Ok(v) => v,
+            Err(e) => return ErrorHandling::Raised(e.into()),
+        }
+    }};
+}
+
+pub fn default_error_handler(
+    error: Error,
+    output: &mut dyn Write,
+    is_terminal: bool,
+) -> ErrorHandling {
+    for cause in error.chain() {
+        if let Some(io_error) = cause.downcast_ref::<io::Error>() {
+            if io_error.kind() == io::ErrorKind::BrokenPipe {
+                return ErrorHandling::SilentFail;
+            }
         }
     }
 
-    writeln!(output, "{}: {:?}", Color::Red.paint("[bat error]"), error).unwrap();
+    let style = is_terminal
+        .then(|| Style::new().fg(Color::Red))
+        .unwrap_or_default();
+    writeln!(
+        output,
+        "{}{}{}: {:?}",
+        style.prefix(),
+        "[bat error]",
+        style.suffix(),
+        error
+    )
+    .expect("failed to print error");
+    return ErrorHandling::Handled;
+}
+
+pub struct Controller<'a> {
+    config: &'a Config<'a>,
+    assets: &'a HighlightingAssets,
 }
 
 impl<'a> Controller<'a> {
@@ -36,7 +73,7 @@ impl<'a> Controller<'a> {
         Controller { config, assets }
     }
 
-    pub fn run(&self, inputs: Vec<Input>) -> Result<bool> {
+    pub fn run(&self, inputs: Vec<Input>) -> ErrorHandling {
         self.run_with_options(inputs, Option::<&mut Vec<u8>>::None, default_error_handler)
     }
 
@@ -44,16 +81,17 @@ impl<'a> Controller<'a> {
         &self,
         inputs: Vec<Input>,
         mut output_buffer: Option<&mut impl Write>,
-        handle_error: impl Fn(&Error, &mut dyn Write),
-    ) -> Result<bool> {
+        handle_error: impl Fn(Error, &mut dyn Write, bool) -> ErrorHandling,
+    ) -> ErrorHandling {
         let panel_width = (!self.config.loop_through)
             .then(|| InteractivePrinter::get_panel_width(self.config))
             .unwrap_or_default();
 
+        let interactive = io::stdout().is_terminal();
+
         #[cfg(feature = "paging")]
         let mut output_type = if output_buffer.is_none() {
-            let interactive = io::stdout().is_terminal();
-            Some(OutputType::from_mode(
+            Some(raise_error!(OutputType::from_mode(
                 self.config.paging_mode.unwrap_or(if interactive {
                     PagingMode::QuitIfOneScreen
                 } else {
@@ -61,7 +99,7 @@ impl<'a> Controller<'a> {
                 }),
                 self.config,
                 panel_width,
-            )?)
+            )))
         } else {
             None
         };
@@ -100,20 +138,28 @@ impl<'a> Controller<'a> {
                 if output_buffer.is_some() {
                     // It doesn't make much sense to send errors straight to stderr if the user
                     // provided their own buffer, so we just return it.
-                    return Err(error);
+                    return ErrorHandling::Raised(error);
                 } else {
                     let output_type = output_type.as_mut().unwrap();
-                    if output_type.is_pager() {
-                        handle_error(&error, output_type.pager_handle().unwrap());
+                    match if output_type.is_pager() {
+                        handle_error(error, output_type.pager_handle().unwrap(), interactive)
                     } else {
-                        handle_error(&error, &mut stderr);
+                        let is_terminal = stderr.is_terminal();
+                        handle_error(error, &mut stderr, is_terminal)
+                    } {
+                        ErrorHandling::Handled | ErrorHandling::NoError => (),
+                        h @ _ => return h,
                     }
                 }
                 no_errors = false;
             }
         }
 
-        Ok(no_errors)
+        if no_errors {
+            ErrorHandling::NoError
+        } else {
+            ErrorHandling::Handled
+        }
     }
 
     fn print_input<W: Write>(

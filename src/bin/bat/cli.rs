@@ -107,7 +107,7 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
         config.wrapping_mode = wrapping_mode;
     }
 
-    if let colored_output @ Some(_) = match (
+    if let Some(colored_output) = match (
         matches.get_flag("force-colorization"),
         matches.get_one::<String>("color").unwrap().as_str(),
     ) {
@@ -116,7 +116,10 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
         (true, _) => Some(true),
         _ => None,
     } {
-        config.colored_output = colored_output;
+        config.colored_output = Some(colored_output);
+        if colored_output {
+            config.always_show_decorations = true;
+        }
     }
 
     if let paging_mode @ Some(_) = match (
@@ -157,7 +160,6 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
     if let Some(style_components) = match matches.get_one::<String>("decorations").unwrap().as_str()
     {
         "never" => Some(StyleComponents::plain()),
-        "always" => Some(StyleComponents::full()),
         _ => {
             if matches.get_count("plain") != 0 {
                 Some(StyleComponents::plain())
@@ -216,6 +218,10 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
         .map(HighlightedLineRanges)
     {
         config.highlighted_lines = hightlighted_lines;
+    }
+
+    if matches.get_one::<String>("decorations").unwrap() == "always" {
+        config.always_show_decorations = true;
     }
 
     #[cfg(feature = "lessopen")]

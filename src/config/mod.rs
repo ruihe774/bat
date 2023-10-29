@@ -82,6 +82,10 @@ pub struct Config {
     #[serde(default)]
     pub highlighted_lines: HighlightedLineRanges,
 
+    /// Always show decorations
+    #[serde(default)]
+    pub always_show_decorations: bool,
+
     /// Whether or not to use $LESSOPEN if set
     #[cfg(feature = "lessopen")]
     #[serde(default)]
@@ -91,14 +95,15 @@ pub struct Config {
 impl Config {
     pub fn consolidate(self, inputs: &'_ [Input]) -> ConsolidatedConfig {
         let stdout = io::stdout();
-        let interactive = stdout.is_terminal();
+        let is_terminal = stdout.is_terminal();
+        let interactive = is_terminal || self.always_show_decorations;
         let style = self.style_components.expand(interactive).unwrap();
         let plain = style.plain();
         ConsolidatedConfig {
             language: self.language,
             nonprintable_notation: self.nonprintable_notation,
             term_width: self.term_width.unwrap_or_else(|| {
-                interactive
+                is_terminal
                     .then(|| console::Term::stdout().size().1)
                     .and_then(|width| NonZeroUsize::try_from(width as usize).ok())
                     .unwrap_or(NonZeroUsize::new(100).unwrap())
@@ -109,7 +114,7 @@ impl Config {
             }),
             colored_output: self
                 .colored_output
-                .unwrap_or_else(|| interactive && env::var_os("NO_COLOR").is_none()),
+                .unwrap_or_else(|| is_terminal && env::var_os("NO_COLOR").is_none()),
             true_color: self.true_color.unwrap_or_else(|| {
                 env::var("COLORTERM")
                     .map(|colorterm| colorterm == "truecolor" || colorterm == "24bit")
@@ -125,7 +130,7 @@ impl Config {
             }),
             #[cfg(feature = "paging")]
             paging_mode: self.paging_mode.unwrap_or_else(|| {
-                if interactive
+                if is_terminal
                     && (!inputs
                         .iter()
                         .any(|input| matches!(input.kind, InputKind::StdIn))
@@ -142,6 +147,7 @@ impl Config {
             pager: self.pager,
             use_italic_text: self.use_italic_text,
             highlighted_lines: self.highlighted_lines,
+            always_show_decorations: self.always_show_decorations,
             #[cfg(feature = "lessopen")]
             no_lessopen: self.no_lessopen,
         }
@@ -167,6 +173,7 @@ pub struct ConsolidatedConfig {
     pub pager: Option<String>,
     pub use_italic_text: bool,
     pub highlighted_lines: HighlightedLineRanges,
+    pub always_show_decorations: bool,
     #[cfg(feature = "lessopen")]
     pub no_lessopen: bool,
 }

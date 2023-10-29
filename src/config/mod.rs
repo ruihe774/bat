@@ -1,14 +1,17 @@
 use std::env::{self, VarError};
+use std::io::{self, IsTerminal};
+use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
 use crate::assets::syntax_mapping::SyntaxMapping;
 use crate::controller::line_range::{HighlightedLineRanges, VisibleLines};
 use crate::error::*;
+use crate::input::{Input, InputKind};
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
 use crate::printer::preprocessor::NonprintableNotation;
-use crate::printer::style::StyleComponents;
+use crate::printer::style::{ExpandedStyleComponents, StyleComponents};
 use crate::printer::WrappingMode;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -22,26 +25,33 @@ pub struct Config<'a> {
     pub nonprintable_notation: Option<NonprintableNotation>,
 
     /// The character width of the terminal
-    pub term_width: usize,
+    #[serde(default)]
+    pub term_width: Option<NonZeroUsize>,
 
-    /// The width of tab characters.
-    /// Currently, a value of 0 will cause tabs to be passed through without expanding them.
-    pub tab_width: usize,
+    /// The width of tab characters
+    /// None will cause tabs to be passed through without expanding them.
+    #[serde(default)]
+    pub tab_width: Option<NonZeroUsize>,
 
     /// Whether or not to simply loop through all input (`cat` mode)
-    pub loop_through: bool,
+    #[serde(default)]
+    pub loop_through: Option<bool>,
 
     /// Whether or not the output should be colorized
-    pub colored_output: bool,
+    #[serde(default)]
+    pub colored_output: Option<bool>,
 
     /// Whether or not the output terminal supports true color
-    pub true_color: bool,
+    #[serde(default)]
+    pub true_color: Option<bool>,
 
     /// Style elements (grid, line numbers, ...)
+    #[serde(default)]
     pub style_components: StyleComponents,
 
     /// If and how text should be wrapped
-    pub wrapping_mode: WrappingMode,
+    #[serde(default)]
+    pub wrapping_mode: Option<WrappingMode>,
 
     /// Pager or STDOUT
     #[cfg(feature = "paging")]
@@ -54,7 +64,7 @@ pub struct Config<'a> {
 
     /// The syntax highlighting theme
     #[serde(default)]
-    pub theme: Option<String>,
+    pub theme: Option<&'a str>,
 
     /// File extension/name mappings
     #[serde(skip)]
@@ -65,6 +75,7 @@ pub struct Config<'a> {
     pub pager: Option<&'a str>,
 
     /// Whether or not to use ANSI italics
+    #[serde(default)]
     pub use_italic_text: bool,
 
     /// Ranges of lines which should be highlighted with a special background color
@@ -81,6 +92,87 @@ fn default_true() -> bool {
     true
 }
 
+impl<'a> Config<'a> {
+    pub fn consolidate(self, inputs: &'_ [Input]) -> ConsolidatedConfig<'a> {
+        let stdout = io::stdout();
+        let interactive = stdout.is_terminal();
+        let style = self.style_components.expand(interactive).unwrap();
+        let plain = style.plain();
+        ConsolidatedConfig {
+            language: self.language,
+            nonprintable_notation: self.nonprintable_notation,
+            term_width: self.term_width.unwrap_or_else(|| {
+                interactive
+                    .then(|| console::Term::stdout().size().1)
+                    .and_then(|width| NonZeroUsize::try_from(width as usize).ok())
+                    .unwrap_or(NonZeroUsize::new(100).unwrap())
+            }),
+            tab_width: self.tab_width,
+            loop_through: self.loop_through.unwrap_or_else(|| {
+                !interactive && !self.colored_output.unwrap_or_default() && style.plain()
+            }),
+            colored_output: self.colored_output.unwrap_or(interactive),
+            true_color: self.true_color.unwrap_or_else(|| {
+                env::var("COLORTERM")
+                    .map(|colorterm| colorterm == "truecolor" || colorterm == "24bit")
+                    .unwrap_or_default()
+            }),
+            style_components: style,
+            wrapping_mode: self.wrapping_mode.unwrap_or_else(|| {
+                if plain {
+                    WrappingMode::NoWrapping
+                } else {
+                    WrappingMode::Character
+                }
+            }),
+            #[cfg(feature = "paging")]
+            paging_mode: self.paging_mode.unwrap_or_else(|| {
+                if interactive
+                    && (!inputs
+                        .iter()
+                        .any(|input| matches!(input.kind, InputKind::StdIn))
+                        || !io::stdin().is_terminal())
+                {
+                    PagingMode::QuitIfOneScreen
+                } else {
+                    PagingMode::Never
+                }
+            }),
+            visible_lines: self.visible_lines,
+            theme: self.theme,
+            syntax_mapping: self.syntax_mapping,
+            pager: self.pager,
+            use_italic_text: self.use_italic_text,
+            highlighted_lines: self.highlighted_lines,
+            #[cfg(feature = "lessopen")]
+            use_lessopen: self.use_lessopen,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsolidatedConfig<'a> {
+    pub language: Option<&'a str>,
+    pub nonprintable_notation: Option<NonprintableNotation>,
+    pub term_width: NonZeroUsize,
+    pub tab_width: Option<NonZeroUsize>,
+    pub loop_through: bool,
+    pub colored_output: bool,
+    pub true_color: bool,
+    pub style_components: ExpandedStyleComponents,
+    pub wrapping_mode: WrappingMode,
+    #[cfg(feature = "paging")]
+    pub paging_mode: PagingMode,
+    pub visible_lines: VisibleLines,
+    pub theme: Option<&'a str>,
+    pub syntax_mapping: SyntaxMapping<'a>,
+    pub pager: Option<&'a str>,
+    pub use_italic_text: bool,
+    pub highlighted_lines: HighlightedLineRanges,
+    #[cfg(feature = "lessopen")]
+    pub use_lessopen: bool,
+}
+
 pub(crate) fn get_env_var(key: &str) -> Result<Option<String>> {
     match env::var(key) {
         Ok(value) => Ok((!value.is_empty()).then_some(value)),
@@ -90,27 +182,10 @@ pub(crate) fn get_env_var(key: &str) -> Result<Option<String>> {
     }
 }
 
-#[cfg(all(feature = "minimal-application", feature = "paging"))]
+#[cfg(all(feature = "minimal-application", feature = "paging", feature = "bugreport"))]
 pub fn get_pager_executable(config_pager: Option<&str>) -> Option<String> {
     crate::output::pager::get_pager(config_pager)
         .ok()
         .flatten()
         .map(|pager| pager.bin)
-}
-
-#[test]
-fn default_config_should_include_all_lines() {
-    use crate::controller::line_range::{LineRanges, RangeCheckResult};
-
-    assert_eq!(LineRanges::all().check(17), RangeCheckResult::InRange);
-}
-
-#[test]
-fn default_config_should_highlight_no_lines() {
-    use crate::controller::line_range::RangeCheckResult;
-
-    assert_ne!(
-        Config::default().highlighted_lines.0.check(17),
-        RangeCheckResult::InRange
-    );
 }

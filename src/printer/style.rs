@@ -21,6 +21,21 @@ impl Display for UnknownStyle {
 
 impl StdError for UnknownStyle {}
 
+#[derive(Debug)]
+pub struct ConflictStyle(pub String, pub String);
+
+impl Display for ConflictStyle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "cannot specify style components '{}' and '{}' together",
+            self.0, self.1
+        )
+    }
+}
+
+impl StdError for ConflictStyle {}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StyleComponent {
     Auto,
@@ -34,8 +49,7 @@ pub enum StyleComponent {
     Plain,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct StyleComponentWrapper(StyleComponent);
 
 impl PartialOrd for StyleComponentWrapper {
@@ -63,13 +77,13 @@ impl From<StyleComponentWrapper> for StyleComponent {
 }
 
 impl StyleComponent {
-    pub fn components(self, interactive_terminal: bool) -> &'static [StyleComponent] {
+    fn components(self, interactive: bool) -> &'static [StyleComponent] {
         match self {
             StyleComponent::Auto => {
-                if interactive_terminal {
-                    StyleComponent::Full.components(interactive_terminal)
+                if interactive {
+                    StyleComponent::Full.components(interactive)
                 } else {
-                    StyleComponent::Plain.components(interactive_terminal)
+                    StyleComponent::Plain.components(interactive)
                 }
             }
             StyleComponent::Grid => &[StyleComponent::Grid],
@@ -110,24 +124,43 @@ impl FromStr for StyleComponent {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct StyleComponents(BTreeSet<StyleComponentWrapper>);
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct StyleComponents(Vec<StyleComponent>);
 
 impl StyleComponents {
-    pub fn new(components: &[StyleComponent]) -> StyleComponents {
-        let set: BTreeSet<_> = components
-            .iter()
+    pub fn new(components: Vec<StyleComponent>) -> Self {
+        StyleComponents(components)
+    }
+
+    pub(crate) fn expand(self, interactive: bool) -> Result<ExpandedStyleComponents> {
+        let components: BTreeSet<_> = self
+            .0
+            .into_iter()
+            .flat_map(|component| component.components(interactive))
             .copied()
             .map(|component| component.into())
             .collect();
-        assert!(
-            !set.contains(&StyleComponent::Grid.into())
-                || !set.contains(&StyleComponent::Rule.into()),
-            "cannot specify style components 'grid' and 'rule' together"
-        );
-        StyleComponents(set)
+        if components.contains(&StyleComponent::Grid.into())
+            && components.contains(&StyleComponent::Rule.into())
+        {
+            Err(ConflictStyle("grid".to_owned(), "rule".to_owned()).into())
+        } else {
+            Ok(ExpandedStyleComponents(components))
+        }
     }
+}
 
+impl Default for StyleComponents {
+    fn default() -> Self {
+        StyleComponents(vec![StyleComponent::Auto])
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExpandedStyleComponents(BTreeSet<StyleComponentWrapper>);
+
+impl ExpandedStyleComponents {
     pub fn grid(&self) -> bool {
         self.0.contains(&StyleComponent::Grid.into())
     }
@@ -153,17 +186,6 @@ impl StyleComponents {
     }
 
     pub fn plain(&self) -> bool {
-        self.0
-            .iter()
-            .copied()
-            .all(|c| c == StyleComponent::Plain.into())
-    }
-
-    pub fn insert(&mut self, component: StyleComponent) {
-        self.0.insert(component.into());
-    }
-
-    pub fn clear(&mut self) {
-        self.0.clear();
+        self.0.is_empty()
     }
 }

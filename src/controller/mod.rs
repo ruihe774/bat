@@ -1,14 +1,13 @@
 use std::io::{self, IsTerminal, Write};
+use std::mem;
 
 use clircle::{Clircle, Identifier};
 use nu_ansi_term::{Color, Style};
 
 use crate::assets::HighlightingAssets;
-use crate::config::Config;
+use crate::config::ConsolidatedConfig as Config;
 use crate::error::*;
 use crate::input::{Input, OpenedInput};
-#[cfg(feature = "paging")]
-use crate::output::pager::PagingMode;
 use crate::output::OutputType;
 use crate::printer::{InteractivePrinter, Printer, SimplePrinter};
 use line_range::{LineRanges, RangeCheckResult};
@@ -49,7 +48,7 @@ pub fn default_error_handler(
     }
 
     let style = is_terminal
-        .then(|| Style::new().fg(Color::Red))
+        .then(|| Color::Red.normal())
         .unwrap_or_default();
     writeln!(
         output,
@@ -69,8 +68,11 @@ pub struct Controller<'a> {
 }
 
 impl<'a> Controller<'a> {
-    pub fn new(config: &'a Config, assets: &'a HighlightingAssets) -> Self {
-        Controller { config, assets }
+    pub fn new(config: &'a Config<'a>, assets: &'a HighlightingAssets) -> Self {
+        Controller {
+            config,
+            assets,
+        }
     }
 
     pub fn run(&self, inputs: Vec<Input>) -> ErrorHandling {
@@ -84,20 +86,14 @@ impl<'a> Controller<'a> {
         handle_error: impl Fn(Error, &mut dyn Write, bool) -> ErrorHandling,
     ) -> ErrorHandling {
         let panel_width = (!self.config.loop_through)
-            .then(|| InteractivePrinter::get_panel_width(self.config))
+            .then(|| InteractivePrinter::get_panel_width(&self.config))
             .unwrap_or_default();
-
-        let interactive = io::stdout().is_terminal();
 
         #[cfg(feature = "paging")]
         let mut output_type = if output_buffer.is_none() {
             Some(raise_error!(OutputType::from_mode(
-                self.config.paging_mode.unwrap_or(if interactive {
-                    PagingMode::QuitIfOneScreen
-                } else {
-                    PagingMode::Never
-                }),
-                self.config,
+                self.config.paging_mode,
+                &self.config,
                 panel_width,
             )))
         } else {
@@ -142,7 +138,8 @@ impl<'a> Controller<'a> {
                 } else {
                     let output_type = output_type.as_mut().unwrap();
                     match if output_type.is_pager() {
-                        handle_error(error, output_type.pager_handle().unwrap(), interactive)
+                        let is_terminal = io::stdout().is_terminal();
+                        handle_error(error, output_type.pager_handle().unwrap(), is_terminal)
                     } else {
                         let is_terminal = stderr.is_terminal();
                         handle_error(error, &mut stderr, is_terminal)
@@ -176,10 +173,11 @@ impl<'a> Controller<'a> {
         )?;
 
         if self.config.loop_through {
-            let mut printer = SimplePrinter::new(self.config);
+            let mut printer = SimplePrinter::new(&self.config);
             self.print_file(&mut printer, writer, &mut opened_input, !is_first)
         } else {
-            let mut printer = InteractivePrinter::new(self.config, self.assets, &mut opened_input)?;
+            let mut printer =
+                InteractivePrinter::new(&self.config, self.assets, &mut opened_input)?;
             self.print_file(&mut printer, writer, &mut opened_input, !is_first)
         }
     }

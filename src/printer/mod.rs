@@ -12,7 +12,7 @@ use syntect::parsing::SyntaxSet;
 use unicode_width::UnicodeWidthChar;
 
 use crate::assets::{HighlightingAssets, SyntaxReferenceInSet, SyntaxUndetected};
-use crate::config::Config;
+use crate::config::ConsolidatedConfig as Config;
 use crate::controller::line_range::RangeCheckResult;
 use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
@@ -26,11 +26,9 @@ pub mod style;
 mod terminal;
 mod vscreen;
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WrappingMode {
     Character,
-    // The bool specifies whether wrapping has been explicitly disabled by the user via --wrap=never
-    #[default]
     NoWrapping,
 }
 
@@ -151,7 +149,7 @@ impl<'a> InteractivePrinter<'a> {
         let mut panel_width: usize = Self::get_panel_width(config);
 
         // Disable the panel if the terminal is too small
-        if config.term_width < panel_width + 7 {
+        if usize::from(config.term_width) < panel_width + 7 {
             panel_width = 0;
         }
 
@@ -186,7 +184,7 @@ impl<'a> InteractivePrinter<'a> {
         })
     }
 
-    pub(crate) fn get_panel_width(config: &'a Config) -> usize {
+    pub(crate) fn get_panel_width(config: &'_ Config) -> usize {
         if config.style_components.numbers() {
             5
         } else {
@@ -196,7 +194,7 @@ impl<'a> InteractivePrinter<'a> {
 
     fn print_horizontal_line_term<W: Write>(&self, handle: &mut W, style: Style) -> io::Result<()> {
         write!(handle, "{}", style.prefix())?;
-        for _ in 0..self.config.term_width {
+        for _ in 0..usize::from(self.config.term_width) {
             write!(handle, "─")?;
         }
         writeln!(handle, "{}", style.suffix())?;
@@ -212,7 +210,7 @@ impl<'a> InteractivePrinter<'a> {
                 write!(handle, "─")?;
             }
             write!(handle, "{}", grid_char)?;
-            for _ in 0..(self.config.term_width - (self.panel_width + 1)) {
+            for _ in 0..(usize::from(self.config.term_width) - (self.panel_width + 1)) {
                 write!(handle, "─")?;
             }
             writeln!(handle, "{}", self.colors.grid.suffix())?;
@@ -291,8 +289,8 @@ impl<'a> InteractivePrinter<'a> {
     }
 
     fn preprocess<'b>(&self, text: &'b str, cursor: &mut usize) -> Cow<'b, str> {
-        if self.config.tab_width != 0 {
-            expand_tabs(text, self.config.tab_width, cursor)
+        if let Some(tab_width) = self.config.tab_width {
+            expand_tabs(text, tab_width, cursor)
         } else {
             *cursor += text.len();
             text.into()
@@ -446,7 +444,8 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
         let title = "8<";
         let title_count = 2;
 
-        let snip_left_count = (self.config.term_width - panel_count - (title_count / 2)) / 4;
+        let snip_left_count =
+            (usize::from(self.config.term_width) - panel_count - (title_count / 2)) / 4;
         for _ in 0..snip_left_count {
             write!(handle, "─ ")?;
         }
@@ -454,7 +453,10 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
 
         write!(handle, "{}", title)?;
 
-        for _ in 0..((self.config.term_width - panel_count - snip_left_count - title_count) / 2) {
+        for _ in
+            0..((usize::from(self.config.term_width) - panel_count - snip_left_count - title_count)
+                / 2)
+        {
             write!(handle, " ─")?;
         }
 
@@ -510,7 +512,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
         }
 
         let mut cursor: usize = 0;
-        let mut cursor_max: usize = self.config.term_width;
+        let mut cursor_max: usize = self.config.term_width.into();
         let mut cursor_total: usize = 0;
 
         // Line highlighting
@@ -521,7 +523,6 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             && self
                 .config
                 .theme
-                .as_ref()
                 .map(|name| name == "ansi")
                 .unwrap_or(false)
         {
@@ -684,7 +685,6 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             && self
                 .config
                 .theme
-                .as_ref()
                 .map(|name| name == "ansi")
                 .unwrap_or(false)
         {

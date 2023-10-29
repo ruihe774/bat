@@ -5,12 +5,12 @@ use std::mem;
 #[cfg(feature = "paging")]
 use std::process::{Child, ChildStdin};
 
+use crate::config::ConsolidatedConfig as Config;
 use crate::error::*;
 #[cfg(feature = "paging")]
 use less::{retrieve_less_version, LessVersion};
 pub use pager::PagingMode;
 
-use crate::config::Config;
 #[cfg(feature = "paging")]
 mod less;
 pub(crate) mod pager;

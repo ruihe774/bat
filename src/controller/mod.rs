@@ -11,7 +11,7 @@ use crate::input::{Input, InputReader, OpenedInput};
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
 use crate::output::OutputType;
-use crate::printer::{InteractivePrinter, OutputHandle, Printer, SimplePrinter};
+use crate::printer::{InteractivePrinter, Printer, SimplePrinter};
 use line_range::{LineRanges, RangeCheckResult};
 
 pub mod line_range;
@@ -119,7 +119,7 @@ impl<'a> Controller<'a> {
     fn print_input<W: Write>(
         &self,
         input: Input,
-        writer: OutputHandle<W>,
+        writer: &mut W,
         stdout_identifier: Option<&Identifier>,
         is_first: bool,
     ) -> Result<()> {
@@ -141,7 +141,7 @@ impl<'a> Controller<'a> {
     fn print_file<W: Write>(
         &self,
         printer: &mut impl Printer<W>,
-        writer: OutputHandle<W>,
+        writer: &mut W,
         input: &mut OpenedInput,
         add_header_padding: bool,
     ) -> Result<()> {
@@ -161,7 +161,7 @@ impl<'a> Controller<'a> {
     fn print_file_ranges<W: Write>(
         &self,
         printer: &mut impl Printer<W>,
-        writer: OutputHandle<W>,
+        writer: &mut W,
         reader: &mut InputReader,
         line_ranges: &LineRanges,
     ) -> Result<()> {

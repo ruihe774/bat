@@ -6,7 +6,7 @@ use nu_ansi_term::{Color, Style};
 use crate::assets::HighlightingAssets;
 use crate::config::Config;
 use crate::error::*;
-use crate::input::{Input, InputReader, OpenedInput};
+use crate::input::{Input, OpenedInput};
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
 use crate::output::OutputType;
@@ -197,7 +197,7 @@ impl<'a> Controller<'a> {
 
         if input.reader.content_type.is_some() {
             let line_ranges = &self.config.visible_lines.0;
-            self.print_file_ranges(printer, writer, &mut input.reader, line_ranges)?;
+            self.print_file_ranges(printer, writer, input, line_ranges)?;
         }
         printer.print_footer(writer, input)?;
 
@@ -208,7 +208,7 @@ impl<'a> Controller<'a> {
         &self,
         printer: &mut impl Printer<W>,
         writer: &mut W,
-        reader: &mut InputReader,
+        input: &mut OpenedInput,
         line_ranges: &LineRanges,
     ) -> Result<()> {
         let mut line_buffer = Vec::new();
@@ -223,7 +223,15 @@ impl<'a> Controller<'a> {
             if range_check == RangeCheckResult::AfterLastRange {
                 break;
             }
-            if !reader.read_line(&mut line_buffer)? {
+
+            if !input.reader.read_line(&mut line_buffer).with_context(|| {
+                let description = &input.description;
+                if let Some(name) = description.name.as_ref() {
+                    format!("failed to read '{}'", name.to_string_lossy())
+                } else {
+                    format!("failed to read {}", description.kind)
+                }
+            })? {
                 break;
             }
 

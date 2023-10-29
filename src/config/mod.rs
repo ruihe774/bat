@@ -12,13 +12,13 @@ use crate::input::{Input, InputKind};
 use crate::output::pager::PagingMode;
 use crate::printer::preprocessor::NonprintableNotation;
 use crate::printer::style::{ExpandedStyleComponents, StyleComponents};
-use crate::printer::WrappingMode;
+use crate::printer::{TabWidth, WrappingMode};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Config<'a> {
+pub struct Config {
     /// The explicitly configured language, if any
     #[serde(default)]
-    pub language: Option<&'a str>,
+    pub language: Option<String>,
 
     /// The configured notation for non-printable characters
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct Config<'a> {
     /// The width of tab characters
     /// None will cause tabs to be passed through without expanding them.
     #[serde(default)]
-    pub tab_width: Option<NonZeroUsize>,
+    pub tab_width: TabWidth,
 
     /// Whether or not to simply loop through all input (`cat` mode)
     #[serde(default)]
@@ -64,15 +64,15 @@ pub struct Config<'a> {
 
     /// The syntax highlighting theme
     #[serde(default)]
-    pub theme: Option<&'a str>,
+    pub theme: Option<String>,
 
     /// File extension/name mappings
     #[serde(skip)]
-    pub syntax_mapping: SyntaxMapping<'a>,
+    pub syntax_mapping: SyntaxMapping,
 
     /// Command to start the pager
     #[serde(default)]
-    pub pager: Option<&'a str>,
+    pub pager: Option<String>,
 
     /// Whether or not to use ANSI italics
     #[serde(default)]
@@ -84,16 +84,12 @@ pub struct Config<'a> {
 
     /// Whether or not to use $LESSOPEN if set
     #[cfg(feature = "lessopen")]
-    #[serde(default = "default_true")]
-    pub use_lessopen: bool,
+    #[serde(default)]
+    pub no_lessopen: bool,
 }
 
-fn default_true() -> bool {
-    true
-}
-
-impl<'a> Config<'a> {
-    pub fn consolidate(self, inputs: &'_ [Input]) -> ConsolidatedConfig<'a> {
+impl Config {
+    pub fn consolidate(self, inputs: &'_ [Input]) -> ConsolidatedConfig {
         let stdout = io::stdout();
         let interactive = stdout.is_terminal();
         let style = self.style_components.expand(interactive).unwrap();
@@ -111,7 +107,9 @@ impl<'a> Config<'a> {
             loop_through: self.loop_through.unwrap_or_else(|| {
                 !interactive && !self.colored_output.unwrap_or_default() && style.plain()
             }),
-            colored_output: self.colored_output.unwrap_or(interactive),
+            colored_output: self
+                .colored_output
+                .unwrap_or_else(|| interactive && env::var_os("NO_COLOR").is_none()),
             true_color: self.true_color.unwrap_or_else(|| {
                 env::var("COLORTERM")
                     .map(|colorterm| colorterm == "truecolor" || colorterm == "24bit")
@@ -145,17 +143,17 @@ impl<'a> Config<'a> {
             use_italic_text: self.use_italic_text,
             highlighted_lines: self.highlighted_lines,
             #[cfg(feature = "lessopen")]
-            use_lessopen: self.use_lessopen,
+            no_lessopen: self.no_lessopen,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct ConsolidatedConfig<'a> {
-    pub language: Option<&'a str>,
+pub struct ConsolidatedConfig {
+    pub language: Option<String>,
     pub nonprintable_notation: Option<NonprintableNotation>,
     pub term_width: NonZeroUsize,
-    pub tab_width: Option<NonZeroUsize>,
+    pub tab_width: TabWidth,
     pub loop_through: bool,
     pub colored_output: bool,
     pub true_color: bool,
@@ -164,13 +162,13 @@ pub struct ConsolidatedConfig<'a> {
     #[cfg(feature = "paging")]
     pub paging_mode: PagingMode,
     pub visible_lines: VisibleLines,
-    pub theme: Option<&'a str>,
-    pub syntax_mapping: SyntaxMapping<'a>,
-    pub pager: Option<&'a str>,
+    pub theme: Option<String>,
+    pub syntax_mapping: SyntaxMapping,
+    pub pager: Option<String>,
     pub use_italic_text: bool,
     pub highlighted_lines: HighlightedLineRanges,
     #[cfg(feature = "lessopen")]
-    pub use_lessopen: bool,
+    pub no_lessopen: bool,
 }
 
 pub(crate) fn get_env_var(key: &str) -> Result<Option<String>> {
@@ -182,7 +180,11 @@ pub(crate) fn get_env_var(key: &str) -> Result<Option<String>> {
     }
 }
 
-#[cfg(all(feature = "minimal-application", feature = "paging", feature = "bugreport"))]
+#[cfg(all(
+    feature = "minimal-application",
+    feature = "paging",
+    feature = "bugreport"
+))]
 pub fn get_pager_executable(config_pager: Option<&str>) -> Option<String> {
     crate::output::pager::get_pager(config_pager)
         .ok()

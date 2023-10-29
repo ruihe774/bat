@@ -546,12 +546,12 @@ mod tests {
 
     struct SyntaxDetectionTest {
         assets: HighlightingAssets,
-        pub syntax_mapping: SyntaxMapping<'static>,
+        pub syntax_mapping: SyntaxMapping,
         pub temp_dir: TempDir,
     }
 
     impl SyntaxDetectionTest {
-        fn new(syntax_mapping: Option<SyntaxMapping<'static>>) -> Self {
+        fn new(syntax_mapping: Option<SyntaxMapping>) -> Self {
             SyntaxDetectionTest {
                 assets: HighlightingAssets::with_no_cache(),
                 syntax_mapping: syntax_mapping

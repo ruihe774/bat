@@ -1,42 +1,30 @@
 #![deny(unsafe_code)]
 
-mod app;
-mod clap_app;
-mod config;
-mod directories;
-mod input;
-
 use std::fmt::Write as _;
-use std::io::{self, IsTerminal, Write};
-use std::path::Path;
-use std::process;
+use std::io::{self, IsTerminal};
+use std::path::{Path, PathBuf};
+use std::{env, process};
 
-use bat::assets::HighlightingAssets;
-use bat::controller::{default_error_handler, ErrorHandling};
+use clap::ArgMatches;
+use etcetera::BaseStrategy;
+use nu_ansi_term::{Color, Style};
+
+use bat::assets::{get_acknowledgements, HighlightingAssets};
+use bat::config::ConsolidatedConfig as Config;
+use bat::controller::{default_error_handler, Controller, ErrorHandling};
+use bat::error::*;
+use bat::input::Input;
+use bat::printer::style::StyleComponents;
 use bat::raise_error;
-use nu_ansi_term::Color::Green;
-use nu_ansi_term::Style;
 
-use crate::{
-    app::App,
-    config::{config_file_path, generate_config_file},
-};
+use crate::config::{config_file_path, generate_config_file};
+// #[cfg(feature = "bugreport")]
+// use crate::config::system_config_file;
 
-#[cfg(feature = "bugreport")]
-use crate::config::system_config_file;
-
-use directories::PROJECT_DIRS;
-
-use bat::{
-    config::Config,
-    controller::Controller,
-    error::*,
-    input::Input,
-    output::PagingMode,
-    printer::style::{StyleComponent, StyleComponents},
-};
-
-const THEME_PREVIEW_DATA: &[u8] = include_bytes!("../../../assets/theme_preview.rs");
+mod clap_app;
+mod cli;
+mod config;
+mod input;
 
 #[cfg(feature = "build-assets")]
 fn build_assets(matches: &clap::ArgMatches, config_dir: &Path, cache_dir: &Path) -> Result<()> {
@@ -63,7 +51,7 @@ fn run_cache_subcommand(
     Ok(())
 }
 
-pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
+fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
     let mut result: String = String::new();
 
     let assets = HighlightingAssets::new(cache_dir)?;
@@ -94,21 +82,11 @@ pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
         });
     }
 
-    languages.sort_by_key(|lang| lang.name.to_uppercase());
-
-    // XXX
-    // let configured_languages = get_syntax_mapping_to_paths(config.syntax_mapping.mappings());
-
-    // for lang in &mut languages {
-    //     if let Some(additional_paths) = configured_languages.get(lang.name.as_str()) {
-    //         lang.file_extensions
-    //             .extend(additional_paths.iter().cloned());
-    //     }
-    // }
+    languages.sort_by_key(|lang| lang.name.to_ascii_uppercase());
 
     if config.loop_through {
         for lang in languages {
-            writeln!(result, "{}:{}", lang.name, lang.file_extensions.join(",")).ok();
+            writeln!(result, "{}:{}", lang.name, lang.file_extensions.join(",")).unwrap();
         }
     } else {
         let longest = languages
@@ -120,16 +98,15 @@ pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
         let comma_separator = ", ";
         let separator = " ";
         // Line-wrapping for the possible file extension overflow.
-        let desired_width = config.term_width - longest - separator.len();
+        let desired_width = usize::from(config.term_width) - longest - separator.len();
 
-        let style = if config.colored_output {
-            Green.normal()
-        } else {
-            Style::default()
-        };
+        let style = config
+            .colored_output
+            .then(|| Color::Green.normal())
+            .unwrap_or_default();
 
         for lang in languages {
-            write!(result, "{:width$}{}", lang.name, separator, width = longest).ok();
+            write!(result, "{:width$}{}", lang.name, separator, width = longest).unwrap();
 
             // Number of characters on this line so far, wrap before `desired_width`
             let mut num_chars = 0;
@@ -140,61 +117,55 @@ pub fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
                 let new_chars = word.len() + comma_separator.len();
                 if num_chars + new_chars >= desired_width {
                     num_chars = 0;
-                    write!(result, "\n{:width$}{}", "", separator, width = longest).ok();
+                    write!(result, "\n{:width$}{}", "", separator, width = longest).unwrap();
                 }
 
                 num_chars += new_chars;
-                write!(result, "{}", style.paint(&word[..])).ok();
+                write!(result, "{}", style.paint(&word[..])).unwrap();
                 if extension.peek().is_some() {
-                    result += comma_separator;
+                    result.push_str(comma_separator);
                 }
             }
-            result += "\n";
+            result.push('\n');
         }
     }
 
     Ok(result)
 }
 
-fn theme_preview_file() -> Input {
-    Input::from_reader(THEME_PREVIEW_DATA)
+fn list_languages(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> ErrorHandling {
+    let languages: String = raise_error!(get_languages(&config, cache_dir));
+    let inputs: Vec<Input> = vec![Input::from_reader(io::Cursor::<Vec<u8>>::new(
+        languages.into(),
+    ))];
+    config.loop_through = true;
+    run_controller(inputs, &config, cache_dir)
 }
 
-pub fn list_themes(cfg: &Config, config_dir: &Path, cache_dir: &Path) -> Result<()> {
-    let assets = HighlightingAssets::new(cache_dir)?;
-    let mut config = cfg.clone();
-    config.language = Some("Rust");
-    config.style_components = StyleComponents::new(&[StyleComponent::Plain]);
+fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> ErrorHandling {
+    let assets = raise_error!(HighlightingAssets::new(cache_dir));
+    config.language = Some("Rust".to_owned());
+    config.style_components = StyleComponents::plain().expand(false).unwrap();
 
-    let stdout = io::stdout();
-    let mut stdout = stdout.lock();
-
-    if config.colored_output {
+    if config.colored_output && !config.loop_through {
         for theme in assets.themes() {
-            writeln!(
-                stdout,
-                "Theme: {}\n",
-                Style::new().bold().paint(theme.to_string())
-            )?;
-            config.theme = Some(theme.to_string());
-            _ = Controller::new(&config, &assets).run(vec![theme_preview_file()]);
-            writeln!(stdout)?;
+            println!("Theme: {}\n", Style::new().bold().paint(theme));
+            config.theme = Some(theme.to_owned());
+            assert!(matches!(
+                Controller::new(&config, &assets).run(vec![Input::from_reader(
+                    include_bytes!("../../../assets/theme_preview.rs").as_slice()
+                )]),
+                ErrorHandling::NoError
+            ));
+            println!();
         }
-        writeln!(
-            stdout,
-            "Further themes can be installed to '{}', \
-            and are added to the cache with `bat cache --build`. \
-            For more information, see:\n\n  \
-            https://github.com/sharkdp/bat#adding-new-themes",
-            config_dir.join("themes").to_string_lossy()
-        )?;
     } else {
         for theme in assets.themes() {
-            writeln!(stdout, "{}", theme)?;
+            println!("{}", theme);
         }
     }
 
-    Ok(())
+    ErrorHandling::NoError
 }
 
 fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> ErrorHandling {
@@ -204,15 +175,11 @@ fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> Erro
 }
 
 #[cfg(feature = "bugreport")]
-fn invoke_bugreport(app: &App, cache_dir: &Path) {
+fn invoke_bugreport(matches: &ArgMatches, config_dir: &Path, cache_dir: &Path) {
     use bugreport::{bugreport, collector::*, format::Plaintext};
-    let pager = bat::config::get_pager_executable(
-        app.matches.get_one::<String>("pager").map(|s| s.as_str()),
-    )
-    .unwrap_or_else(|| "less".to_owned()); // FIXME: Avoid non-canonical path to "less".
-
-    let mut custom_assets_metadata = cache_dir.to_path_buf();
-    custom_assets_metadata.push("metadata.yaml");
+    let pager =
+        bat::config::get_pager_executable(matches.get_one::<String>("pager").map(|s| s.as_str()))
+            .unwrap_or_else(|| "less".to_owned()); // FIXME: Avoid non-canonical path to "less".
 
     let mut report = bugreport!()
         .info(SoftwareVersion::default())
@@ -238,8 +205,11 @@ fn invoke_bugreport(app: &App, cache_dir: &Path) {
             "NO_COLOR",
             "MANPAGER",
         ]))
-        .info(FileContent::new("System Config file", system_config_file()))
-        .info(FileContent::new("Config file", config_file_path()))
+        // .info(FileContent::new("System Config file", system_config_file()))
+        .info(FileContent::new(
+            "Config file",
+            config_file_path(config_dir),
+        ))
         .info(DirectoryEntries::new("Cached assets", cache_dir))
         .info(CompileTimeInformation::default());
 
@@ -258,19 +228,21 @@ fn invoke_bugreport(app: &App, cache_dir: &Path) {
 /// Returns `Err(..)` upon fatal errors. Otherwise, returns `Ok(true)` on full success and
 /// `Ok(false)` if any intermediate errors occurred (were printed).
 fn run() -> ErrorHandling {
-    let app = raise_error!(App::new());
-    let config_dir = PROJECT_DIRS.config_dir();
-    let cache_dir = PROJECT_DIRS.cache_dir();
+    #[cfg(windows)]
+    let _ = nu_ansi_term::enable_ansi_support();
 
-    if app.matches.get_flag("diagnostic") {
-        #[cfg(feature = "bugreport")]
-        invoke_bugreport(&app, cache_dir);
-        #[cfg(not(feature = "bugreport"))]
-        println!("bat has been built without the 'bugreport' feature. The '--diagnostic' option is not available.");
+    let matches = cli::get_matches();
+    let cache_dir = raise_error!(get_cache_dir());
+    let config_dir = raise_error!(get_config_dir());
+    let config_file = config_file_path(&config_dir);
+
+    #[cfg(feature = "bugreport")]
+    if matches.get_flag("diagnostic") {
+        invoke_bugreport(&matches, &config_dir, &cache_dir);
         return ErrorHandling::NoError;
     }
 
-    match app.matches.subcommand() {
+    match matches.subcommand() {
         #[cfg(feature = "build-assets")]
         Some(("cache", cache_matches)) => {
             // If there is a file named 'cache' in the current working directory,
@@ -287,47 +259,50 @@ fn run() -> ErrorHandling {
             }
         }
         _ => {
-            let inputs = raise_error!(app.inputs());
-            let config = raise_error!(app.config(&inputs));
+            let inputs = raise_error!(cli::get_inputs(&matches));
+            let config = raise_error!(cli::get_config(&matches, &config_file));
 
-            if app.matches.get_flag("list-languages") {
-                let languages: String = raise_error!(get_languages(&config, cache_dir));
-                let inputs: Vec<Input> = vec![Input::from_reader(io::Cursor::<Vec<u8>>::new(
-                    languages.into(),
-                ))];
-                let plain_config = Config {
-                    style_components: StyleComponents::new(StyleComponent::Plain.components(false)),
-                    paging_mode: Some(PagingMode::QuitIfOneScreen),
-                    ..Default::default()
-                };
-                run_controller(inputs, &plain_config, cache_dir)
-            } else if app.matches.get_flag("list-themes") {
-                raise_error!(list_themes(&config, config_dir, cache_dir));
+            if matches.get_flag("list-languages") {
+                list_languages(config.consolidate(&inputs), &config_dir, &cache_dir)
+            } else if matches.get_flag("list-themes") {
+                list_themes(config.consolidate(&inputs), &config_dir, &cache_dir)
+            } else if matches.get_flag("config-file") {
+                println!("{}", config_file.display());
                 ErrorHandling::NoError
-            } else if app.matches.get_flag("config-file") {
-                println!("{}", config_file_path().to_string_lossy());
+            } else if matches.get_flag("generate-config-file") {
+                raise_error!(generate_config_file(&config, &config_file));
                 ErrorHandling::NoError
-            } else if app.matches.get_flag("generate-config-file") {
-                raise_error!(generate_config_file(&config));
+            } else if matches.get_flag("config-dir") {
+                println!("{}", config_dir.display());
                 ErrorHandling::NoError
-            } else if app.matches.get_flag("config-dir") {
-                raise_error!(writeln!(io::stdout(), "{}", config_dir.to_string_lossy()));
+            } else if matches.get_flag("cache-dir") {
+                println!("{}", cache_dir.display());
                 ErrorHandling::NoError
-            } else if app.matches.get_flag("cache-dir") {
-                raise_error!(writeln!(io::stdout(), "{}", cache_dir.to_string_lossy()));
-                ErrorHandling::NoError
-            } else if app.matches.get_flag("acknowledgements") {
-                raise_error!(writeln!(
-                    io::stdout(),
-                    "{}",
-                    bat::assets::get_acknowledgements()
-                ));
+            } else if matches.get_flag("acknowledgements") {
+                println!("{}", get_acknowledgements());
                 ErrorHandling::NoError
             } else {
-                run_controller(inputs, &config, cache_dir)
+                let config = config.consolidate(&inputs);
+                run_controller(inputs, &config, &cache_dir)
             }
         }
     }
+}
+
+fn get_cache_dir() -> Result<PathBuf> {
+    Ok(if let Some(cache_dir) = env::var_os("BAT_CACHE_PATH") {
+        cache_dir.into()
+    } else {
+        etcetera::choose_base_strategy()?.cache_dir().join("bat")
+    })
+}
+
+fn get_config_dir() -> Result<PathBuf> {
+    Ok(if let Some(config_dir) = env::var_os("BAT_CONFIG_DIR") {
+        config_dir.into()
+    } else {
+        etcetera::choose_base_strategy()?.config_dir().join("bat")
+    })
 }
 
 fn handle_result(result: ErrorHandling) -> ! {

@@ -1,5 +1,5 @@
+use std::borrow::Cow;
 use std::fmt::Write;
-use std::{borrow::Cow, num::NonZeroUsize};
 
 use bstr::ByteSlice;
 use serde::{Deserialize, Serialize};
@@ -14,12 +14,7 @@ pub enum NonprintableNotation {
 }
 
 /// Expand tabs
-pub(crate) fn expand_tabs<'a>(
-    mut text: &'a str,
-    width: NonZeroUsize,
-    cursor: &mut usize,
-) -> Cow<'a, str> {
-    let width = usize::from(width);
+pub(crate) fn expand_tabs<'a>(mut text: &'a str, width: usize, cursor: &mut usize) -> Cow<'a, str> {
     let mut buffer = String::new();
 
     while let Some(index) = text.find('\t') {
@@ -49,11 +44,10 @@ pub(crate) fn expand_tabs<'a>(
 
 pub(crate) fn replace_nonprintable(
     input: &[u8],
-    tab_width: Option<NonZeroUsize>,
+    tab_width: usize,
     nonprintable_notation: NonprintableNotation,
 ) -> String {
     let mut output = Vec::with_capacity(input.len());
-    let tab_width: usize = tab_width.map(usize::from).unwrap_or(4);
     let mut line_idx = 0;
     let mut buf = String::with_capacity(6);
     for chunk in input.utf8_chunks() {

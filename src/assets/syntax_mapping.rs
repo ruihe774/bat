@@ -7,9 +7,9 @@ use os_str_bytes::RawOsString;
 use crate::error::Result;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum MappingTarget<'a> {
+pub enum MappingTarget {
     /// For mapping a path to a specific syntax.
-    MapTo(&'a str),
+    MapTo(&'static str),
 
     /// For mapping a path (typically an extension-less file name) to an unknown
     /// syntax. This typically means later using the contents of the first line
@@ -26,15 +26,15 @@ pub enum MappingTarget<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct SyntaxMapping<'a> {
-    targets: Vec<MappingTarget<'a>>,
+pub struct SyntaxMapping {
+    targets: Vec<MappingTarget>,
     globset: GlobSet,
     ignored_suffixes: AhoCorasick,
 }
 
-impl<'a> SyntaxMapping<'a> {
+impl SyntaxMapping {
     pub fn new(
-        mapping: impl IntoIterator<Item = (Glob, MappingTarget<'a>)>,
+        mapping: impl IntoIterator<Item = (Glob, MappingTarget)>,
         ignored_suffixes: impl IntoIterator<Item = String>,
     ) -> Result<Self> {
         let mut builder = GlobSetBuilder::new();
@@ -89,7 +89,7 @@ impl<'a> SyntaxMapping<'a> {
     }
 }
 
-impl<'a> Default for SyntaxMapping<'a> {
+impl Default for SyntaxMapping {
     fn default() -> Self {
         let patterns: [&[u8]; 0] = [];
         SyntaxMapping {
@@ -101,12 +101,12 @@ impl<'a> Default for SyntaxMapping<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct SyntaxMappingBuilder<'a> {
-    pub mapping: Vec<(Glob, MappingTarget<'a>)>,
+pub struct SyntaxMappingBuilder {
+    pub mapping: Vec<(Glob, MappingTarget)>,
     pub ignored_suffixes: Vec<String>,
 }
 
-impl<'a> SyntaxMappingBuilder<'a> {
+impl SyntaxMappingBuilder {
     pub fn new() -> Self {
         SyntaxMappingBuilder {
             mapping: Vec::new(),
@@ -139,11 +139,11 @@ impl<'a> SyntaxMappingBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> Result<SyntaxMapping<'a>> {
+    pub fn build(self) -> Result<SyntaxMapping> {
         SyntaxMapping::new(self.mapping, self.ignored_suffixes)
     }
 
-    pub fn map_syntax(mut self, glob: &'_ str, target: MappingTarget<'a>) -> Result<Self> {
+    pub fn map_syntax(mut self, glob: &'_ str, target: MappingTarget) -> Result<Self> {
         self.mapping.push((
             GlobBuilder::new(glob)
                 .case_insensitive(true)
@@ -160,7 +160,7 @@ impl<'a> SyntaxMappingBuilder<'a> {
     }
 }
 
-impl<'a> Default for SyntaxMappingBuilder<'a> {
+impl Default for SyntaxMappingBuilder {
     fn default() -> Self {
         Self::new()
     }

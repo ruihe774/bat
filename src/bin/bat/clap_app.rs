@@ -1,7 +1,10 @@
+use bat::controller::line_range::LineRange;
+use bat::printer::style::StyleComponent;
 use clap::{crate_authors, crate_description, crate_name, crate_version, value_parser};
 use clap::{Arg, ArgAction, Command};
 use std::env;
 use std::ffi::OsString;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
 pub fn build_app() -> Command {
@@ -23,6 +26,7 @@ pub fn build_app() -> Command {
         .hide_possible_values(true)
         .args_conflicts_with_subcommands(true)
         .disable_help_subcommand(true)
+        .max_term_width(100)
         .arg(
             Arg::new("FILE")
                 .help("File(s) to print / concatenate. Use '-' for standard input.")
@@ -35,9 +39,9 @@ pub fn build_app() -> Command {
         )
         .arg(
             Arg::new("show-all")
+                .short('A')
                 .long("show-all")
                 .alias("show-nonprintable")
-                .short('A')
                 .action(ArgAction::SetTrue)
                 .conflicts_with("language")
                 .help("Show non-printable characters (space, tab, newline, ..).")
@@ -52,6 +56,8 @@ pub fn build_app() -> Command {
                 .long("nonprintable-notation")
                 .value_parser(["unicode", "caret"])
                 .value_name("notation")
+                .overrides_with("show-all")
+                .conflicts_with("language")
                 .help("Set notation for non-printable characters.")
                 .long_help(
                     "Set notation for non-printable characters.\n\n\
@@ -62,12 +68,11 @@ pub fn build_app() -> Command {
         )
         .arg(
             Arg::new("plain")
-                .overrides_with("plain")
-                .overrides_with("number")
-                .overrides_with("paging")
                 .short('p')
                 .long("plain")
                 .action(ArgAction::Count)
+                .conflicts_with("style")
+                .conflicts_with("number")
                 .help("Show plain style (alias for '--style=plain').")
                 .long_help(
                     "Only show plain style, no decorations. This is an alias for \
@@ -79,7 +84,6 @@ pub fn build_app() -> Command {
             Arg::new("language")
                 .short('l')
                 .long("language")
-                .overrides_with("language")
                 .help("Set the language for syntax highlighting.")
                 .long_help(
                     "Explicitly set the language for syntax highlighting. The language can be \
@@ -90,10 +94,11 @@ pub fn build_app() -> Command {
         )
         .arg(
             Arg::new("highlight-line")
-                .long("highlight-line")
                 .short('H')
+                .long("highlight-line")
                 .action(ArgAction::Append)
                 .value_name("N:M")
+                .value_parser(LineRange::parse)
                 .help("Highlight lines N through M.")
                 .long_help(
                     "Highlight the specified line ranges with a different background color \
@@ -108,6 +113,7 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("file-name")
                 .long("file-name")
+                .alias("filename")
                 .action(ArgAction::Append)
                 .value_name("name")
                 .value_parser(value_parser!(OsString))
@@ -122,18 +128,16 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("tabs")
                 .long("tabs")
-                .overrides_with("tabs")
                 .value_name("T")
                 .value_parser(value_parser!(usize))
                 .help("Set the tab width to T spaces.")
                 .long_help(
-                    "Set the tab width to T spaces. Use a width of 0 to pass tabs through directly",
+                    "Set the tab width to T spaces. Use a width of 0 to pass tabs through directly.",
                 ),
         )
         .arg(
             Arg::new("wrap")
                 .long("wrap")
-                .overrides_with("wrap")
                 .value_name("mode")
                 .value_parser(["auto", "never", "character"])
                 .default_value("auto")
@@ -148,8 +152,7 @@ pub fn build_app() -> Command {
                 .long("terminal-width")
                 .value_name("width")
                 .hide_short_help(true)
-                .allow_negative_numbers(true)
-                .value_parser(value_parser!(isize))
+                .value_parser(value_parser!(NonZeroUsize))
                 .help(
                     "Explicitly set the width of the terminal instead of determining it \
                      automatically. If prefixed with '+' or '-', the value will be treated \
@@ -158,10 +161,10 @@ pub fn build_app() -> Command {
         )
         .arg(
             Arg::new("number")
-                .long("number")
-                .overrides_with("number")
                 .short('n')
+                .long("number")
                 .action(ArgAction::SetTrue)
+                .conflicts_with("style")
                 .help("Show line numbers (alias for '--style=numbers').")
                 .long_help(
                     "Only show line numbers, no other decorations. This is an alias for \
@@ -171,7 +174,6 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("color")
                 .long("color")
-                .overrides_with("color")
                 .value_name("when")
                 .value_parser(["auto", "never", "always"])
                 .hide_default_value(true)
@@ -189,15 +191,15 @@ pub fn build_app() -> Command {
                 .long("italic-text")
                 .value_name("when")
                 .value_parser(["always", "never"])
-                .default_value("never")
-                .hide_default_value(true)
                 .help("Use italics in output (always, *never*)")
-                .long_help("Specify when to use ANSI sequences for italic text in the output. Possible values: always, *never*."),
+                .long_help(
+                    "Specify when to use ANSI sequences for italic text in the output. \
+                     Possible values: always, *never*.",
+                ),
         )
         .arg(
             Arg::new("decorations")
                 .long("decorations")
-                .overrides_with("decorations")
                 .value_name("when")
                 .value_parser(["auto", "never", "always"])
                 .default_value("auto")
@@ -211,12 +213,10 @@ pub fn build_app() -> Command {
         )
         .arg(
             Arg::new("force-colorization")
-                .long("force-colorization")
                 .short('f')
+                .long("force-colorization")
                 .action(ArgAction::SetTrue)
                 .conflicts_with("color")
-                .conflicts_with("decorations")
-                .overrides_with("force-colorization")
                 .hide_short_help(true)
                 .long_help("Alias for '--decorations=always --color=always'. This is useful \
                         if the output of bat is piped to another program, but you want \
@@ -225,13 +225,11 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("paging")
                 .long("paging")
-                .overrides_with("paging")
-                .overrides_with("no-paging")
-                .overrides_with("plain")
                 .value_name("when")
                 .value_parser(["auto", "never", "always"])
                 .default_value("auto")
                 .hide_default_value(true)
+                .conflicts_with("no-paging")
                 .help("Specify when to use the pager, or use `-P` to disable (*auto*, never, always).")
                 .long_help(
                     "Specify when to use the pager. To disable the pager, use \
@@ -246,7 +244,6 @@ pub fn build_app() -> Command {
                 .long("no-paging")
                 .alias("no-pager")
                 .action(ArgAction::SetTrue)
-                .overrides_with("no-paging")
                 .hide(true)
                 .hide_short_help(true)
                 .help("Alias for '--paging=never'")
@@ -254,7 +251,6 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("pager")
                 .long("pager")
-                .overrides_with("pager")
                 .value_name("command")
                 .hide_short_help(true)
                 .help("Determine which pager to use.")
@@ -271,6 +267,11 @@ pub fn build_app() -> Command {
                 .long("map-syntax")
                 .action(ArgAction::Append)
                 .value_name("glob:syntax")
+                .value_parser(|s: &str| if s.split(':').count() == 2 {
+                    Ok(s.to_owned())
+                } else {
+                    Err("invalid syntax mapping")
+                })
                 .help("Use the specified syntax for files matching the glob pattern ('*.cpp:C++').")
                 .long_help(
                     "Map a glob pattern to an existing syntax name. The glob pattern is matched \
@@ -293,7 +294,6 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("theme")
                 .long("theme")
-                .overrides_with("theme")
                 .help("Set the color theme for syntax highlighting.")
                 .long_help(
                     "Set the theme for syntax highlighting. Use '--list-themes' to \
@@ -313,34 +313,10 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("style")
                 .long("style")
+                .action(ArgAction::Append)
                 .value_name("components")
-                .overrides_with("style")
-                .overrides_with("plain")
-                .overrides_with("number")
-                // Cannot use claps built in validation because we have to turn off clap's delimiters
-                .value_parser(|val: &str| {
-                    let mut invalid_vals = val.split(',').filter(|style| {
-                        !&[
-                            "auto",
-                            "full",
-                            "default",
-                            "plain",
-                            "header",
-                            "header-filename",
-                            "header-filesize",
-                            "grid",
-                            "rule",
-                            "numbers",
-                            "snip",
-                        ].contains(style)
-                    });
-
-                    if let Some(invalid) = invalid_vals.next() {
-                        Err(format!("unknown style '{}'", invalid))
-                    } else {
-                        Ok(val.to_owned())
-                    }
-                })
+                .value_delimiter(',')
+                .value_parser(value_parser!(StyleComponent))
                 .help(
                     "Comma-separated list of style elements to display \
                      (*default*, auto, full, plain, changes, header, header-filename, header-filesize, grid, rule, numbers, snip).",
@@ -371,10 +347,11 @@ pub fn build_app() -> Command {
         )
         .arg(
             Arg::new("line-range")
-                .long("line-range")
                 .short('r')
+                .long("line-range")
                 .action(ArgAction::Append)
                 .value_name("N:M")
+                .value_parser(LineRange::parse)
                 .help("Only print the lines from N to M.")
                 .long_help(
                     "Only print the specified range of lines for each file. \
@@ -388,8 +365,8 @@ pub fn build_app() -> Command {
         )
         .arg(
             Arg::new("list-languages")
-                .long("list-languages")
                 .short('L')
+                .long("list-languages")
                 .action(ArgAction::SetTrue)
                 .conflicts_with("list-themes")
                 .help("Display all supported languages.")
@@ -402,9 +379,7 @@ pub fn build_app() -> Command {
                 .action(ArgAction::SetTrue)
                 .hide_short_help(true)
                 .long_help(
-                    "This option exists for POSIX-compliance reasons ('u' is for \
-                     'unbuffered'). The output is always unbuffered - this option \
-                     is simply ignored.",
+                    "This option exists for POSIX-compliance reasons ('u' is for 'unbuffered')."
                 ),
         )
         .arg(
@@ -427,7 +402,7 @@ pub fn build_app() -> Command {
         app = app.arg(
             Arg::new("no-lessopen")
                 .long("no-lessopen")
-                .action(ArgAction::SetTrue)
+                .action(ArgAction::Count)
                 .help("Disable the $LESSOPEN preprocessor"),
         )
     }
@@ -437,8 +412,6 @@ pub fn build_app() -> Command {
             Arg::new("config-file")
                 .long("config-file")
                 .action(ArgAction::SetTrue)
-                .conflicts_with("list-languages")
-                .conflicts_with("list-themes")
                 .hide(true)
                 .help("Show path to the configuration file."),
         )
@@ -446,8 +419,6 @@ pub fn build_app() -> Command {
             Arg::new("generate-config-file")
                 .long("generate-config-file")
                 .action(ArgAction::SetTrue)
-                .conflicts_with("list-languages")
-                .conflicts_with("list-themes")
                 .hide(true)
                 .help("Generates a default configuration file."),
         )
@@ -466,6 +437,16 @@ pub fn build_app() -> Command {
                 .help("Show bat's cache directory."),
         )
         .arg(
+            Arg::new("acknowledgements")
+                .long("acknowledgements")
+                .action(ArgAction::SetTrue)
+                .hide_short_help(true)
+                .help("Show acknowledgements."),
+        );
+
+    #[cfg(feature = "bugreport")]
+    {
+        app = app.arg(
             Arg::new("diagnostic")
                 .long("diagnostic")
                 .alias("diagnostics")
@@ -473,13 +454,7 @@ pub fn build_app() -> Command {
                 .hide_short_help(true)
                 .help("Show diagnostic information for bug reports."),
         )
-        .arg(
-            Arg::new("acknowledgements")
-                .long("acknowledgements")
-                .action(ArgAction::SetTrue)
-                .hide_short_help(true)
-                .help("Show acknowledgements."),
-        );
+    }
 
     #[cfg(not(feature = "build-assets"))]
     return app;

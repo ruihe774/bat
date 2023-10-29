@@ -67,8 +67,7 @@ impl OutputType {
         use pager::{PagerKind, PagerSource};
         use std::process::{Command, Stdio};
 
-        let pager_from_config = config.pager;
-        let pager_opt = pager::get_pager(pager_from_config)?;
+        let pager_opt = pager::get_pager(config.pager.as_ref().map(|s| s.as_str()))?;
 
         let pager = match pager_opt {
             Some(pager) => pager,

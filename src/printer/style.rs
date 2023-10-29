@@ -133,7 +133,15 @@ impl StyleComponents {
         StyleComponents(components)
     }
 
-    pub(crate) fn expand(self, interactive: bool) -> Result<ExpandedStyleComponents> {
+    pub fn plain() -> Self {
+        Self::new(Vec::new())
+    }
+
+    pub fn full() -> Self {
+        Self::new(vec![StyleComponent::Full])
+    }
+
+    pub fn expand(self, interactive: bool) -> Result<ExpandedStyleComponents> {
         let components: BTreeSet<_> = self
             .0
             .into_iter()

@@ -46,9 +46,7 @@ pub fn default_error_handler(
         }
     }
 
-    let style = is_terminal
-        .then(|| Color::Red.normal())
-        .unwrap_or_default();
+    let style = is_terminal.then(|| Color::Red.normal()).unwrap_or_default();
     writeln!(
         output,
         "{}[bat error]{}: {:?}",
@@ -61,16 +59,13 @@ pub fn default_error_handler(
 }
 
 pub struct Controller<'a> {
-    config: &'a Config<'a>,
+    config: &'a Config,
     assets: &'a HighlightingAssets,
 }
 
 impl<'a> Controller<'a> {
-    pub fn new(config: &'a Config<'a>, assets: &'a HighlightingAssets) -> Self {
-        Controller {
-            config,
-            assets,
-        }
+    pub fn new(config: &'a Config, assets: &'a HighlightingAssets) -> Self {
+        Controller { config, assets }
     }
 
     pub fn run(&self, inputs: Vec<Input>) -> ErrorHandling {
@@ -167,7 +162,7 @@ impl<'a> Controller<'a> {
         let mut opened_input = input.open(
             stdout_identifier,
             #[cfg(feature = "lessopen")]
-            self.config.use_lessopen,
+            !self.config.no_lessopen,
         )?;
 
         if self.config.loop_through {

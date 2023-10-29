@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::io;
 use std::io::Write;
+use std::num::NonZeroUsize;
 
 use console::AnsiCodeIterator;
 use nu_ansi_term::{Color as TermColor, Style};
@@ -32,6 +33,28 @@ pub enum WrappingMode {
     NoWrapping,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TabWidth(Option<NonZeroUsize>);
+
+impl Default for TabWidth {
+    fn default() -> Self {
+        TabWidth(Some(NonZeroUsize::new(4).unwrap()))
+    }
+}
+
+impl From<Option<NonZeroUsize>> for TabWidth {
+    fn from(value: Option<NonZeroUsize>) -> Self {
+        TabWidth(value)
+    }
+}
+
+impl From<TabWidth> for usize {
+    fn from(value: TabWidth) -> Self {
+        value.0.map(usize::from).unwrap_or_default()
+    }
+}
+
 pub(crate) trait Printer<W: Write> {
     fn print_header(
         &mut self,
@@ -53,7 +76,7 @@ pub(crate) trait Printer<W: Write> {
 }
 
 pub(crate) struct SimplePrinter<'a> {
-    config: &'a Config<'a>,
+    config: &'a Config,
 }
 
 impl<'a> SimplePrinter<'a> {
@@ -89,8 +112,15 @@ impl<'a, W: Write> Printer<W> for SimplePrinter<'a> {
     ) -> Result<()> {
         if !out_of_range {
             if let Some(nonprintable_notation) = self.config.nonprintable_notation {
-                let line =
-                    replace_nonprintable(line_buffer, self.config.tab_width, nonprintable_notation);
+                let line = replace_nonprintable(
+                    line_buffer,
+                    self.config
+                        .tab_width
+                        .0
+                        .map(|width| usize::from(width))
+                        .unwrap_or(4),
+                    nonprintable_notation,
+                );
                 write!(handle, "{}", line)?;
             } else {
                 handle.write_all(line_buffer)?;
@@ -116,7 +146,7 @@ impl<'a> HighlighterFromSet<'a> {
 
 pub(crate) struct InteractivePrinter<'a> {
     colors: Colors,
-    config: &'a Config<'a>,
+    config: &'a Config,
     panel_width: usize,
     ansi_style: AnsiStyle,
     content_type: Option<ContentType>,
@@ -159,14 +189,17 @@ impl<'a> InteractivePrinter<'a> {
             None
         } else {
             // Determine the type of syntax for highlighting
-            let syntax_in_set =
-                match assets.get_syntax(config.language, input, &config.syntax_mapping) {
-                    Ok(syntax_in_set) => syntax_in_set,
-                    Err(e) if e.downcast_ref::<SyntaxUndetected>().is_some() => {
-                        assets.get_fallback_syntax()
-                    }
-                    Err(e) => return Err(e),
-                };
+            let syntax_in_set = match assets.get_syntax(
+                config.language.as_ref().map(|s| s.as_str()),
+                input,
+                &config.syntax_mapping,
+            ) {
+                Ok(syntax_in_set) => syntax_in_set,
+                Err(e) if e.downcast_ref::<SyntaxUndetected>().is_some() => {
+                    assets.get_fallback_syntax()
+                }
+                Err(e) => return Err(e),
+            };
 
             Some(HighlighterFromSet::new(syntax_in_set, theme))
         };
@@ -289,8 +322,8 @@ impl<'a> InteractivePrinter<'a> {
     }
 
     fn preprocess<'b>(&self, text: &'b str, cursor: &mut usize) -> Cow<'b, str> {
-        if let Some(tab_width) = self.config.tab_width {
-            expand_tabs(text, tab_width, cursor)
+        if let Some(tab_width) = self.config.tab_width.0 {
+            expand_tabs(text, usize::from(tab_width), cursor)
         } else {
             *cursor += text.len();
             text.into()
@@ -469,7 +502,12 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
         line_buffer: &[u8],
     ) -> Result<()> {
         let line = if let Some(nonprintable_notation) = self.config.nonprintable_notation {
-            replace_nonprintable(line_buffer, self.config.tab_width, nonprintable_notation).into()
+            replace_nonprintable(
+                line_buffer,
+                self.config.tab_width.0.map(usize::from).unwrap_or(4),
+                nonprintable_notation,
+            )
+            .into()
         } else {
             match self
                 .content_type
@@ -519,6 +557,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             && self
                 .config
                 .theme
+                .as_ref()
                 .map(|name| name == "ansi")
                 .unwrap_or(false)
         {
@@ -681,6 +720,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             && self
                 .config
                 .theme
+                .as_ref()
                 .map(|name| name == "ansi")
                 .unwrap_or(false)
         {

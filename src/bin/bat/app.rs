@@ -15,13 +15,12 @@ use console::Term;
 use crate::input::{new_file_input, new_stdin_input};
 use bat::{
     config::Config,
-    controller::line_range::{HighlightedLineRanges, LineRange, LineRanges},
-    controller::VisibleLines,
+    controller::line_range::{HighlightedLineRanges, LineRange, LineRanges, VisibleLines},
     error::*,
     input::Input,
-    output::pager::PagingMode,
-    printer::preprocessor::NonprintableNotation,
+    output::PagingMode,
     printer::style::{StyleComponent, StyleComponents},
+    printer::NonprintableNotation,
     printer::WrappingMode,
 };
 

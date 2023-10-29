@@ -3,8 +3,7 @@ use std::env::{self, VarError};
 use serde::{Deserialize, Serialize};
 
 use crate::assets::syntax_mapping::SyntaxMapping;
-use crate::controller::line_range::HighlightedLineRanges;
-use crate::controller::VisibleLines;
+use crate::controller::line_range::{HighlightedLineRanges, VisibleLines};
 use crate::error::*;
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
@@ -72,7 +71,7 @@ pub struct Config<'a> {
     #[serde(default)]
     pub highlighted_lines: HighlightedLineRanges,
 
-    // Whether or not to use $LESSOPEN if set
+    /// Whether or not to use $LESSOPEN if set
     #[cfg(feature = "lessopen")]
     #[serde(default = "default_true")]
     pub use_lessopen: bool,

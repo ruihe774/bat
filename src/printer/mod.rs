@@ -16,11 +16,12 @@ use crate::config::Config;
 use crate::controller::line_range::RangeCheckResult;
 use crate::error::*;
 use crate::input::{decode, ContentType, OpenedInput};
+pub use preprocessor::NonprintableNotation;
 use preprocessor::{expand_tabs, replace_nonprintable};
 use terminal::{to_ansi_color, to_ansi_style};
 use vscreen::AnsiStyle;
 
-pub mod preprocessor;
+pub(crate) mod preprocessor;
 pub mod style;
 mod terminal;
 mod vscreen;

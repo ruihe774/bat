@@ -3,7 +3,6 @@ use std::process;
 
 use clircle::{Clircle, Identifier};
 use nu_ansi_term::Color;
-use serde::{Deserialize, Serialize};
 
 use crate::assets::HighlightingAssets;
 use crate::config::Config;
@@ -16,16 +15,6 @@ use crate::printer::{InteractivePrinter, OutputHandle, Printer, SimplePrinter};
 use line_range::{LineRanges, RangeCheckResult};
 
 pub mod line_range;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct VisibleLines(pub LineRanges);
-
-impl Default for VisibleLines {
-    fn default() -> Self {
-        VisibleLines(LineRanges::all())
-    }
-}
 
 pub struct Controller<'a> {
     config: &'a Config<'a>,

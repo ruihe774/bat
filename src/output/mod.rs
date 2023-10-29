@@ -8,12 +8,12 @@ use std::process::{Child, ChildStdin};
 use crate::error::*;
 #[cfg(feature = "paging")]
 use less::{retrieve_less_version, LessVersion};
-use pager::PagingMode;
+pub use pager::PagingMode;
 
 use crate::config::Config;
 #[cfg(feature = "paging")]
 mod less;
-pub mod pager;
+pub(crate) mod pager;
 
 #[derive(Debug)]
 pub struct InvalidPagerValueBat;

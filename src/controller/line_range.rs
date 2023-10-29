@@ -113,7 +113,7 @@ impl LineRange {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum RangeCheckResult {
+pub(crate) enum RangeCheckResult {
     // Within one of the given ranges
     InRange,
 
@@ -177,6 +177,16 @@ pub struct HighlightedLineRanges(pub LineRanges);
 impl Default for HighlightedLineRanges {
     fn default() -> Self {
         HighlightedLineRanges(LineRanges::none())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct VisibleLines(pub LineRanges);
+
+impl Default for VisibleLines {
+    fn default() -> Self {
+        VisibleLines(LineRanges::all())
     }
 }
 

@@ -31,7 +31,7 @@ use bat::{
     controller::Controller,
     error::*,
     input::Input,
-    output::pager::PagingMode,
+    output::PagingMode,
     printer::style::{StyleComponent, StyleComponents},
 };
 

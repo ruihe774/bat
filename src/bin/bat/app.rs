@@ -200,7 +200,14 @@ impl App {
             wrapping_mode: if self.interactive_output || maybe_term_width.is_some() {
                 match self.matches.get_one::<String>("wrap").map(|s| s.as_str()) {
                     Some("character") => WrappingMode::Character,
-                    Some("never") | Some("auto") | None => WrappingMode::NoWrapping,
+                    Some("never") => WrappingMode::NoWrapping,
+                    Some("auto") | None => {
+                        if style_components.plain() {
+                            WrappingMode::NoWrapping
+                        } else {
+                            WrappingMode::Character
+                        }
+                    }
                     _ => unreachable!("other values for --wrap are not allowed"),
                 }
             } else {

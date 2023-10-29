@@ -1,15 +1,14 @@
-use super::*;
-
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
+use once_cell::unsync::OnceCell;
 use serde::Deserialize;
 use serde::Serialize;
-
-use once_cell::unsync::OnceCell;
-
 use serde_bytes::{ByteBuf, Bytes};
 use syntect::highlighting::Theme;
+
+use super::asset_from_bytes;
+use crate::error::Result;
 
 /// Same structure as a [`syntect::highlighting::ThemeSet`] but with themes
 /// stored in raw serialized form, and deserialized on demand.
@@ -43,7 +42,7 @@ impl LazyThemeSet {
 
     /// Returns the name of all themes.
     pub fn themes(&self) -> impl Iterator<Item = &str> {
-        self.themes.keys().map(|name| name.as_str())
+        self.themes.keys().map(String::as_str)
     }
 }
 

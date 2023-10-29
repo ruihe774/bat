@@ -11,7 +11,7 @@ use bstr::ByteSlice;
 
 use super::{Input, InputKind};
 use crate::config::get_env_var;
-use crate::error::*;
+use crate::error::{Context, Result};
 
 #[derive(Debug)]
 pub struct PathNotUnicode {
@@ -115,11 +115,9 @@ impl LessOpen {
                         return Ok(None);
                     }
                 }
-                InputKind::OrdinaryFile(ref path) => {
-                    path.to_str().ok_or_else(|| PathNotUnicode {
-                        path: path.to_owned(),
-                    })?
-                }
+                InputKind::OrdinaryFile(ref path) => path
+                    .to_str()
+                    .ok_or_else(|| PathNotUnicode { path: path.clone() })?,
                 InputKind::CustomReader(_) => return Ok(None), // maybe it needs a warning?
             };
 
@@ -164,7 +162,7 @@ impl LessOpen {
                 LessOpenKind::PipedIgnoreExitCode => {
                     let stdout = child.stdout.take().unwrap();
                     let mut reader = PeekReader::new(stdout);
-                    if reader.peek().map(|byte| byte.is_none()).unwrap_or(true) {
+                    if reader.peek().map_or(true, |byte| byte.is_none()) {
                         None
                     } else {
                         let close =
@@ -184,10 +182,9 @@ impl LessOpen {
                             sleep(Duration::from_millis(10));
                             false
                         }
-                        || child
-                            .try_wait()
-                            .map(|status| status.map_or(false, |status| !status.success()))
-                            .unwrap_or(true)
+                        || child.try_wait().map_or(true, |status| {
+                            status.map_or(false, |status| !status.success())
+                        })
                     {
                         None
                     } else {
@@ -251,13 +248,12 @@ impl<R: Read> PeekReader<R> {
             return Ok(Some(byte));
         }
         let mut buf = [0; 1];
-        match self.inner.read(&mut buf)? {
-            0 => Ok(None),
-            _ => {
-                let byte = buf[0];
-                self.peek = Some(byte);
-                Ok(Some(byte))
-            }
+        if self.inner.read(&mut buf)? == 0 {
+            Ok(None)
+        } else {
+            let byte = buf[0];
+            self.peek = Some(byte);
+            Ok(Some(byte))
         }
     }
 }
@@ -277,9 +273,8 @@ impl<R: Read> Read for PeekReader<R> {
     }
 
     fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
-        let slice = match bufs.iter_mut().find(|slice| !slice.is_empty()) {
-            Some(slice) => slice,
-            None => return Ok(0),
+        let Some(slice) = bufs.iter_mut().find(|slice| !slice.is_empty()) else {
+            return Ok(0);
         };
         let len = if let Some(byte) = self.peek.take() {
             slice[0] = byte;

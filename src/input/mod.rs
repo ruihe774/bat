@@ -12,7 +12,7 @@ use clircle::{Clircle, Identifier};
 #[cfg(feature = "zero-copy")]
 use memmap2::MmapOptions;
 
-use crate::error::*;
+use crate::error::{Context, Result};
 #[cfg(feature = "lessopen")]
 use lessopen::LessOpen;
 #[cfg(feature = "zero-copy")]
@@ -364,13 +364,13 @@ pub(crate) fn decode<'a>(
     Some(match content_type {
         UTF_8 => {
             let input = remove_bom
-                .and_then(|_| input.strip_prefix(&[0xEF, 0xBB, 0xBF]))
+                .and_then(|()| input.strip_prefix(&[0xEF, 0xBB, 0xBF]))
                 .unwrap_or(input);
             String::from_utf8_lossy(input)
         }
         UTF_16LE => {
             let input = remove_bom
-                .and_then(|_| input.strip_prefix(&[0xFF, 0xFE]))
+                .and_then(|()| input.strip_prefix(&[0xFF, 0xFE]))
                 .unwrap_or(input);
             let mut s: String = char::decode_utf16(
                 input
@@ -386,7 +386,7 @@ pub(crate) fn decode<'a>(
         }
         UTF_16BE => {
             let input = remove_bom
-                .and_then(|_| input.strip_prefix(&[0xFE, 0xFF]))
+                .and_then(|()| input.strip_prefix(&[0xFE, 0xFF]))
                 .unwrap_or(input);
             let mut s: String = char::decode_utf16(
                 input
@@ -402,7 +402,7 @@ pub(crate) fn decode<'a>(
         }
         UTF_32LE => {
             let input = remove_bom
-                .and_then(|_| input.strip_prefix(&[0xFF, 0xFE, 0x00, 0x00]))
+                .and_then(|()| input.strip_prefix(&[0xFF, 0xFE, 0x00, 0x00]))
                 .unwrap_or(input);
             let mut s: String = input
                 .chunks_exact(4)
@@ -416,7 +416,7 @@ pub(crate) fn decode<'a>(
         }
         UTF_32BE => {
             let input = remove_bom
-                .and_then(|_| input.strip_prefix(&[0x00, 0x00, 0xFE, 0xFF]))
+                .and_then(|()| input.strip_prefix(&[0x00, 0x00, 0xFE, 0xFF]))
                 .unwrap_or(input);
             let mut s: String = input
                 .chunks_exact(4)

@@ -15,7 +15,7 @@ use unicode_width::UnicodeWidthChar;
 use crate::assets::{HighlightingAssets, SyntaxReferenceInSet, SyntaxUndetected};
 use crate::config::ConsolidatedConfig as Config;
 use crate::controller::line_range::RangeCheckResult;
-use crate::error::*;
+use crate::error::Result;
 use crate::input::{decode, ContentType, OpenedInput};
 pub use preprocessor::NonprintableNotation;
 use preprocessor::{expand_tabs, replace_nonprintable};
@@ -51,7 +51,7 @@ impl From<Option<NonZeroUsize>> for TabWidth {
 
 impl From<TabWidth> for usize {
     fn from(value: TabWidth) -> Self {
-        value.0.map(usize::from).unwrap_or_default()
+        value.0.map_or(0, usize::from)
     }
 }
 
@@ -114,14 +114,10 @@ impl<'a, W: Write> Printer<W> for SimplePrinter<'a> {
             if let Some(nonprintable_notation) = self.config.nonprintable_notation {
                 let line = replace_nonprintable(
                     line_buffer,
-                    self.config
-                        .tab_width
-                        .0
-                        .map(|width| usize::from(width))
-                        .unwrap_or(4),
+                    self.config.tab_width.0.map_or(4, usize::from),
                     nonprintable_notation,
                 );
-                write!(handle, "{}", line)?;
+                write!(handle, "{line}")?;
             } else {
                 handle.write_all(line_buffer)?;
             };
@@ -190,7 +186,7 @@ impl<'a> InteractivePrinter<'a> {
         } else {
             // Determine the type of syntax for highlighting
             let syntax_in_set = match assets.get_syntax(
-                config.language.as_ref().map(|s| s.as_str()),
+                config.language.as_deref(),
                 input,
                 &config.syntax_mapping,
             ) {
@@ -242,7 +238,7 @@ impl<'a> InteractivePrinter<'a> {
             for _ in 0..self.panel_width {
                 write!(handle, "─")?;
             }
-            write!(handle, "{}", grid_char)?;
+            write!(handle, "{grid_char}")?;
             for _ in 0..(usize::from(self.config.term_width) - (self.panel_width + 1)) {
                 write!(handle, "─")?;
             }
@@ -283,7 +279,7 @@ impl<'a> InteractivePrinter<'a> {
                 write!(handle, " ")?;
             }
         } else {
-            write!(handle, "{:4}", line_number)?;
+            write!(handle, "{line_number:4}")?;
         }
         write!(handle, "{}", self.colors.line_number.suffix())?;
         Ok(self.line_number_width)
@@ -346,7 +342,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             if self
                 .content_type
                 .as_ref()
-                .map_or(false, |content_type| content_type.is_binary())
+                .map_or(false, ContentType::is_binary)
                 && self.config.nonprintable_notation.is_none()
             {
                 let warning_color = TermColor::Yellow;
@@ -369,7 +365,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                                 .as_ref()
                         )
                     } else {
-                        input.description.kind.to_owned()
+                        input.description.kind.clone()
                     },
                 )?;
             } else if self.config.style_components.grid() {
@@ -420,14 +416,17 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                 },
             )?;
             if let Some(ContentType::Binary(Some(ref binary_type))) = self.content_type {
-                writeln!(handle, " {}", binary_type)?;
+                writeln!(handle, " {binary_type}")?;
             } else {
                 writeln!(handle)?;
             }
         };
 
         if self.config.style_components.grid() {
-            if self.content_type.as_ref().map_or(false, |c| c.is_text())
+            if self
+                .content_type
+                .as_ref()
+                .map_or(false, ContentType::is_text)
                 || self.config.nonprintable_notation.is_some()
             {
                 self.print_horizontal_line(handle, '┼')?;
@@ -441,7 +440,10 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
 
     fn print_footer(&mut self, handle: &mut W, _input: &OpenedInput) -> Result<()> {
         if self.config.style_components.grid()
-            && (self.content_type.as_ref().map_or(false, |c| c.is_text())
+            && (self
+                .content_type
+                .as_ref()
+                .map_or(false, ContentType::is_text)
                 || self.config.nonprintable_notation.is_some())
         {
             Ok(self.print_horizontal_line(handle, '┴')?)
@@ -454,9 +456,11 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
         write!(handle, "{}", self.colors.grid.prefix())?;
 
         let panel_text = " ...";
-        let panel_count = if self.panel_width != 0 {
+        let panel_count = if self.panel_width == 0 {
+            0
+        } else {
             let text_truncated = &panel_text[..(self.panel_width - 1)];
-            write!(handle, "{}", text_truncated)?;
+            write!(handle, "{text_truncated}")?;
             for _ in 0..(self.panel_width - 1 - text_truncated.len()) {
                 write!(handle, " ")?;
             }
@@ -466,8 +470,6 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             } else {
                 self.panel_width - 1
             }
-        } else {
-            0
         };
 
         let title = "8<";
@@ -480,7 +482,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
         }
         let snip_left_count = snip_left_count * 2;
 
-        write!(handle, "{}", title)?;
+        write!(handle, "{title}")?;
 
         for _ in
             0..((usize::from(self.config.term_width) - panel_count - snip_left_count - title_count)
@@ -504,7 +506,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
         let line = if let Some(nonprintable_notation) = self.config.nonprintable_notation {
             replace_nonprintable(
                 line_buffer,
-                self.config.tab_width.0.map(usize::from).unwrap_or(4),
+                self.config.tab_width.0.map_or(4, usize::from),
                 nonprintable_notation,
             )
             .into()
@@ -520,9 +522,8 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
         };
 
         let regions = {
-            let highlighter_from_set = match self.highlighter_from_set {
-                Some(ref mut highlighter_from_set) => highlighter_from_set,
-                _ => return Ok(()),
+            let Some(ref mut highlighter_from_set) = self.highlighter_from_set else {
+                return Ok(());
             };
 
             // skip syntax highlighting on long lines
@@ -558,8 +559,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                 .config
                 .theme
                 .as_ref()
-                .map(|name| name == "ansi")
-                .unwrap_or(false)
+                .is_some_and(|name| name == "ansi")
         {
             self.ansi_style.update("^[4m");
         }
@@ -583,7 +583,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                         // ANSI escape passthrough.
                         (ansi, true) => {
                             self.ansi_style.update(ansi);
-                            write!(handle, "{}", ansi)?;
+                            write!(handle, "{ansi}")?;
                         }
 
                         // Regular text.
@@ -645,7 +645,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                         // ANSI escape passthrough.
                         (ansi, true) => {
                             self.ansi_style.update(ansi);
-                            write!(handle, "{}", ansi)?;
+                            write!(handle, "{ansi}")?;
                         }
 
                         // Regular text.
@@ -669,7 +669,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
 
                             for c in text.chars() {
                                 // calculate the displayed width for next character
-                                let cw = c.width().unwrap_or(0);
+                                let cw = c.width().unwrap_or_default();
                                 current_width += cw;
 
                                 // if next character cannot be printed on this line,
@@ -687,7 +687,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                                     current_width = cw;
                                 }
 
-                                write!(handle, "{}", c)?;
+                                write!(handle, "{c}")?;
                             }
 
                             // flush the buffer
@@ -721,8 +721,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                 .config
                 .theme
                 .as_ref()
-                .map(|name| name == "ansi")
-                .unwrap_or(false)
+                .is_some_and(|name| name == "ansi")
         {
             self.ansi_style.update("^[24m");
             write!(handle, "\x1B[24m")?;

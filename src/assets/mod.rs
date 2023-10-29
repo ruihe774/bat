@@ -13,7 +13,7 @@ use serde::de::DeserializeOwned;
 use syntect::highlighting::Theme;
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
-use crate::error::*;
+use crate::error::{Context, Result};
 #[cfg(feature = "zero-copy")]
 use crate::input::zero_copy::{leak_mmap, LeakySliceReader};
 use crate::input::{InputReader, OpenedInput};
@@ -193,10 +193,10 @@ impl HighlightingAssets {
     }
 
     /// Detect the syntax based on, in order:
-    ///  1. Syntax mappings with [MappingTarget::MapTo] and [MappingTarget::MapToUnknown]
+    ///  1. Syntax mappings with [`MappingTarget::MapTo`] and [`MappingTarget::MapToUnknown`]
     ///     (e.g. `/etc/profile` -> `Bourne Again Shell (bash)`)
     ///  2. The file name (e.g. `Dockerfile`)
-    ///  3. Syntax mappings with [MappingTarget::MapExtensionToUnknown]
+    ///  3. Syntax mappings with [`MappingTarget::MapExtensionToUnknown`]
     ///     (e.g. `*.conf`)
     ///  4. The file name extension (e.g. `.rs`)
     ///
@@ -206,13 +206,13 @@ impl HighlightingAssets {
     /// detecting syntax based on file name extension, only the file name
     /// extension itself matters.
     ///
-    /// Returns [SyntaxUndetected] if it was not possible detect syntax
+    /// Returns [`SyntaxUndetected`] if it was not possible detect syntax
     /// based on path/file name/extension (or if the path was mapped to
-    /// [MappingTarget::MapToUnknown] or [MappingTarget::MapExtensionToUnknown]).
+    /// [`MappingTarget::MapToUnknown`] or [`MappingTarget::MapExtensionToUnknown`]).
     /// In this case it is appropriate to fall back to other methods to detect
     /// syntax. Such as using the contents of the first line of the file.
     ///
-    /// Returns [UnknownSyntax] if a syntax mapping exist, but the mapped
+    /// Returns [`UnknownSyntax`] if a syntax mapping exist, but the mapped
     /// syntax does not exist.
     pub fn get_syntax_for_path(
         &self,
@@ -309,11 +309,11 @@ impl HighlightingAssets {
             .and_then(|err| err.downcast_ref::<SyntaxUndetected>())
             .is_some()
         {
-            if let Some(sr) = self.get_first_line_syntax(&mut input.reader)? {
+            if let Some(sr) = self.get_first_line_syntax(&mut input.reader) {
                 return Ok(sr);
             }
             #[cfg(feature = "guesslang")]
-            if let Some(sr) = self.get_syntax_by_guesslang(&mut input.reader)? {
+            if let Some(sr) = self.get_syntax_by_guesslang(&mut input.reader) {
                 return Ok(sr);
             }
         }
@@ -348,11 +348,8 @@ impl HighlightingAssets {
             })
     }
 
-    fn get_first_line_syntax(
-        &self,
-        reader: &mut InputReader,
-    ) -> Result<Option<SyntaxReferenceInSet>> {
-        Ok(reader
+    fn get_first_line_syntax(&self, reader: &mut InputReader) -> Option<SyntaxReferenceInSet> {
+        reader
             .first_read
             .as_ref()
             .map(|s| s.split_inclusive('\n').next().unwrap_or(s))
@@ -360,15 +357,12 @@ impl HighlightingAssets {
             .map(|syntax| SyntaxReferenceInSet {
                 syntax,
                 syntax_set: &self.syntax_set,
-            }))
+            })
     }
 
     #[cfg(feature = "guesslang")]
-    fn get_syntax_by_guesslang(
-        &self,
-        reader: &mut InputReader,
-    ) -> Result<Option<SyntaxReferenceInSet>> {
-        Ok(reader
+    fn get_syntax_by_guesslang(&self, reader: &mut InputReader) -> Option<SyntaxReferenceInSet> {
+        reader
             .first_read
             .as_ref()
             .and_then(|s| self.guesslang.guess(s.clone()))
@@ -376,7 +370,7 @@ impl HighlightingAssets {
             .map(|syntax| SyntaxReferenceInSet {
                 syntax,
                 syntax_set: &self.syntax_set,
-            }))
+            })
     }
 }
 
@@ -394,9 +388,7 @@ fn macos_dark_mode_active() -> bool {
         .output()
         .map(|output| output.stdout)
         .ok();
-    let is_dark = output
-        .map(|output| output.starts_with(b"Dark".as_slice()))
-        .unwrap_or(false);
+    let is_dark = output.is_some_and(|output| output.starts_with(b"Dark".as_slice()));
     is_dark
 }
 
@@ -426,7 +418,7 @@ fn load_asset_bytes(
             "gz",
             "asset_path must end with .gz"
         );
-        write!(&mut cache_file, ".{:x}.bin", checksum)?;
+        write!(&mut cache_file, ".{checksum:x}.bin")?;
         let cache_file = cache_dir.as_ref().join(cache_file.as_os_str());
         Some(cache_file)
     } else {
@@ -522,7 +514,7 @@ fn absolute_path(path: impl AsRef<Path>) -> io::Result<PathBuf> {
                         let mut pathbuf = env::current_dir()?;
                         _ = pathbuf.pop();
                         pathbuf
-                    })
+                    });
                 }
             },
             Component::CurDir => (),
@@ -568,8 +560,10 @@ mod tests {
         ) -> String {
             self.assets
                 .get_syntax(language, input, mapping)
-                .map(|syntax_in_set| syntax_in_set.syntax.name.clone())
-                .unwrap_or_else(|_| "!no syntax!".to_owned())
+                .map_or_else(
+                    |_| "!no syntax!".to_owned(),
+                    |syntax_in_set| syntax_in_set.syntax.name.clone(),
+                )
         }
 
         fn syntax_for_real_file_with_content_os(
@@ -580,7 +574,7 @@ mod tests {
             let file_path = self.temp_dir.path().join(file_name);
             {
                 let mut temp_file = File::create(&file_path).unwrap();
-                writeln!(temp_file, "{}", first_line).unwrap();
+                writeln!(temp_file, "{first_line}").unwrap();
             }
 
             let input = Input::from_file(&file_path);
@@ -628,9 +622,8 @@ mod tests {
 
             if !consistent {
                 eprintln!(
-                    "Inconsistent syntax detection:\nFor File: {}\nFor Reader: {}",
-                    as_file, as_reader
-                )
+                    "Inconsistent syntax detection:\nFor File: {as_file}\nFor Reader: {as_reader}"
+                );
             }
 
             consistent

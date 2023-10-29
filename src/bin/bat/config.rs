@@ -48,7 +48,7 @@ pub fn generate_config_file(config: &Config, config_file: &Path) -> Result<()> {
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open(&config_file)?,
+                .open(config_file)?,
         ),
         config,
         ron::ser::PrettyConfig::new().extensions(ron::extensions::Extensions::IMPLICIT_SOME),

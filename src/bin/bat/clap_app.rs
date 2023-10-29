@@ -13,11 +13,10 @@ pub fn build_app() -> Command {
             #[cfg(feature = "bugreport")]
             Some(bugreport::git_version!(fallback = ""))
                 .filter(|s| !s.is_empty())
-                .map(|git_version| {
+                .map_or(crate_version!(), |git_version| {
                     let version: &str = format!("{} ({})", crate_version!(), git_version).leak();
                     version
-                })
-                .unwrap_or(crate_version!()),
+                }),
             #[cfg(not(feature = "bugreport"))]
             crate_version!(),
         )

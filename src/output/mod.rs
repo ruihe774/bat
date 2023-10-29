@@ -6,7 +6,7 @@ use std::mem;
 use std::process::{Child, ChildStdin};
 
 use crate::config::ConsolidatedConfig as Config;
-use crate::error::*;
+use crate::error::Result;
 #[cfg(feature = "paging")]
 use less::{retrieve_less_version, LessVersion};
 pub use pager::PagingMode;
@@ -53,7 +53,7 @@ impl OutputType {
             PagingMode::QuitIfOneScreen => {
                 OutputType::try_pager(SingleScreenAction::Quit, config, panel_width)?
             }
-            _ => OutputType::stdout(),
+            PagingMode::Never => OutputType::stdout(),
         })
     }
 
@@ -67,22 +67,18 @@ impl OutputType {
         use pager::{PagerKind, PagerSource};
         use std::process::{Command, Stdio};
 
-        let pager_opt = pager::get_pager(config.pager.as_ref().map(|s| s.as_str()))?;
+        let pager_opt = pager::get_pager(config.pager.as_deref())?;
 
-        let pager = match pager_opt {
-            Some(pager) => pager,
-            None => return Ok(OutputType::stdout()),
+        let Some(pager) = pager_opt else {
+            return Ok(OutputType::stdout());
         };
 
         if pager.kind == PagerKind::Bat {
             return Err(InvalidPagerValueBat.into());
         }
 
-        let resolved_path = match grep_cli::resolve_binary(&pager.bin) {
-            Ok(path) => path,
-            Err(_) => {
-                return Ok(OutputType::stdout());
-            }
+        let Ok(resolved_path) = grep_cli::resolve_binary(&pager.bin) else {
+            return Ok(OutputType::stdout());
         };
 
         let mut p = Command::new(resolved_path);
@@ -169,8 +165,9 @@ impl OutputType {
                     None
                 }
             })
-            .map(|(child, stdin)| OutputType::Pager(child, Some(io::LineWriter::new(stdin))))
-            .unwrap_or_else(OutputType::stdout))
+            .map_or_else(OutputType::stdout, |(child, stdin)| {
+                OutputType::Pager(child, Some(io::LineWriter::new(stdin)))
+            }))
     }
 
     pub fn stdout() -> Self {
@@ -194,7 +191,7 @@ impl OutputType {
     pub fn stdout_handle(&mut self) -> Option<&mut impl Write> {
         match self {
             OutputType::Stdout(handle) => Some(handle),
-            _ => None,
+            OutputType::Pager(_, _) => None,
         }
     }
 
@@ -202,7 +199,7 @@ impl OutputType {
         #[cfg(feature = "paging")]
         match self {
             OutputType::Pager(_, handle) => Some(handle.as_mut().unwrap()),
-            _ => None,
+            OutputType::Stdout(_) => None,
         }
         #[cfg(not(feature = "paging"))]
         None

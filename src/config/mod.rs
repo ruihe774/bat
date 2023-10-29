@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::assets::syntax_mapping::SyntaxMapping;
 use crate::controller::line_range::{HighlightedLineRanges, VisibleLines};
-use crate::error::*;
+use crate::error::{Context, Result};
 use crate::input::{Input, InputKind};
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
@@ -117,16 +117,14 @@ impl Config {
                 .unwrap_or_else(|| is_terminal && env::var_os("NO_COLOR").is_none()),
             true_color: self.true_color.unwrap_or_else(|| {
                 env::var("COLORTERM")
-                    .map(|colorterm| colorterm == "truecolor" || colorterm == "24bit")
-                    .unwrap_or_default()
+                    .ok()
+                    .is_some_and(|colorterm| colorterm == "truecolor" || colorterm == "24bit")
             }),
             style_components: style,
-            wrapping_mode: self.wrapping_mode.unwrap_or_else(|| {
-                if plain {
-                    WrappingMode::NoWrapping
-                } else {
-                    WrappingMode::Character
-                }
+            wrapping_mode: self.wrapping_mode.unwrap_or(if plain {
+                WrappingMode::NoWrapping
+            } else {
+                WrappingMode::Character
             }),
             #[cfg(feature = "paging")]
             paging_mode: self.paging_mode.unwrap_or_else(|| {
@@ -183,7 +181,7 @@ pub(crate) fn get_env_var(key: &str) -> Result<Option<String>> {
         Ok(value) => Ok((!value.is_empty()).then_some(value)),
         Err(VarError::NotPresent) => Ok(None),
         Err(e @ VarError::NotUnicode(_)) => Err(e)
-            .with_context(|| format!("the value of environment variable '{}' is not unicode", key)),
+            .with_context(|| format!("the value of environment variable '{key}' is not unicode")),
     }
 }
 

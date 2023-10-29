@@ -88,7 +88,7 @@ pub(crate) fn replace_nonprintable(
 
                         NonprintableNotation::Unicode => {
                             let replacement_symbol = char::from_u32(0x2400 + c).unwrap();
-                            output.push(replacement_symbol)
+                            output.push(replacement_symbol);
                         }
                     }
                 }
@@ -102,7 +102,7 @@ pub(crate) fn replace_nonprintable(
                     || c.is_ascii_punctuation()
                     || c.is_ascii_graphic() =>
                 {
-                    output.push(c)
+                    output.push(c);
                 }
                 // everything else
                 c => output.extend(c.escape_unicode()),
@@ -110,7 +110,7 @@ pub(crate) fn replace_nonprintable(
             line_idx += output.len() - before_size;
         }
         for byte in chunk.invalid() {
-            write!(buf, "\\x{:02X}", byte).unwrap();
+            write!(buf, "\\x{byte:02X}").unwrap();
             output.extend(buf.chars());
             buf.clear();
             line_idx += 6;

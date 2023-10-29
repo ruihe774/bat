@@ -91,7 +91,7 @@ impl LineRange {
                 if let Some(upper) = right.strip_prefix('+') {
                     let upper = upper.parse().map_err(|_| invalid())?;
                     let upper = lower.checked_add(upper).ok_or_else(invalid)?;
-                    new_range.1 = Bound::Included(upper)
+                    new_range.1 = Bound::Included(upper);
                 } else if let Some(upper) = right.strip_prefix('-') {
                     if upper.strip_prefix('+').is_some() {
                         return Err(invalid());
@@ -142,8 +142,8 @@ impl LineRanges {
             (Bound::Unbounded, Bound::Unbounded) => Ordering::Equal,
             (_, Bound::Unbounded) => Ordering::Less,
             (Bound::Unbounded, _) => Ordering::Greater,
-            (Bound::Included(left), Bound::Included(right)) => left.cmp(right),
-            (Bound::Excluded(left), Bound::Excluded(right)) => left.cmp(right),
+            (Bound::Included(left), Bound::Included(right))
+            | (Bound::Excluded(left), Bound::Excluded(right)) => left.cmp(right),
             (Bound::Included(left), Bound::Excluded(right)) => left
                 .checked_add(1)
                 .map_or(Ordering::Greater, |left| left.cmp(right)),

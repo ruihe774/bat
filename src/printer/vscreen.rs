@@ -117,28 +117,27 @@ impl Attributes {
     fn update_with_sgr(&mut self, parameters: &str) -> bool {
         let mut iter = parameters
             .split(';')
-            .map(|p| if p.is_empty() { "0" } else { p })
-            .map(|p| p.parse::<u16>())
-            .map(|p| p.unwrap_or(0)); // Treat errors as 0.
+            .map(str::parse)
+            .map(Result::unwrap_or_default); // Treat errors as 0.
 
         while let Some(p) = iter.next() {
             match p {
                 0 => self.sgr_reset(),
                 1 => {
                     self.bold.clear();
-                    write!(self.bold, "\x1B[{}m", parameters).unwrap();
+                    write!(self.bold, "\x1B[{parameters}m").unwrap();
                 }
                 2 => {
                     self.dim.clear();
-                    write!(self.dim, "\x1B[{}m", parameters).unwrap();
+                    write!(self.dim, "\x1B[{parameters}m").unwrap();
                 }
                 3 => {
                     self.italic.clear();
-                    write!(self.italic, "\x1B[{}m", parameters).unwrap();
+                    write!(self.italic, "\x1B[{parameters}m").unwrap();
                 }
                 4 => {
                     self.underline.clear();
-                    write!(self.underline, "\x1B[{}m", parameters).unwrap();
+                    write!(self.underline, "\x1B[{parameters}m").unwrap();
                 }
                 23 => self.italic.clear(),
                 24 => self.underline.clear(),
@@ -146,7 +145,7 @@ impl Attributes {
                     self.bold.clear();
                     self.dim.clear();
                 }
-                30..=39 => {
+                30..=39 | 90..=97 | 100..=107 => {
                     self.foreground.clear();
                     Self::parse_color(&mut self.foreground, p, &mut iter);
                 }
@@ -157,14 +156,6 @@ impl Attributes {
                 58..=59 => {
                     self.underlined.clear();
                     Self::parse_color(&mut self.underlined, p, &mut iter);
-                }
-                90..=97 => {
-                    self.foreground.clear();
-                    Self::parse_color(&mut self.foreground, p, &mut iter);
-                }
-                100..=107 => {
-                    self.foreground.clear();
-                    Self::parse_color(&mut self.foreground, p, &mut iter);
                 }
                 _ => {
                     // Unsupported SGR sequence.
@@ -199,24 +190,24 @@ impl Attributes {
         match color % 10 {
             8 => match parameters.next() {
                 Some(5) /* 256-color */ => {
-                    write!(out, "\x1B[{};5", color).unwrap();
+                    write!(out, "\x1B[{color};5").unwrap();
                     if let Some(value) = parameters.next() {
-                        write!(out, ";{}", value).unwrap();
+                        write!(out, ";{value}").unwrap();
                     }
                     write!(out, "m").unwrap();
                 },
                 Some(2) /* 24-bit color */ => {
-                    write!(out, "\x1B[{};2", color).unwrap();
+                    write!(out, "\x1B[{color};2").unwrap();
                     for value in parameters.take(3) {
-                        write!(out, ";{}", value).unwrap();
+                        write!(out, ";{value}").unwrap();
                     }
                     write!(out, "m").unwrap();
                 },
-                Some(c) => write!(out, "\x1B[{};{}m", color, c).unwrap(),
+                Some(c) => write!(out, "\x1B[{color};{c}m").unwrap(),
                 _ => (),
             },
             9 => (),
-            _ => write!(out, "\x1B[{}m", color).unwrap(),
+            _ => write!(out, "\x1B[{color}m").unwrap(),
         }
     }
 }

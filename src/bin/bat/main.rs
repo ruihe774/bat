@@ -29,8 +29,7 @@ mod input;
 fn build_assets(matches: &clap::ArgMatches, config_dir: &Path, cache_dir: &Path) -> Result<()> {
     let source_dir = matches
         .get_one::<String>("source")
-        .map(Path::new)
-        .unwrap_or_else(|| config_dir);
+        .map_or(config_dir, Path::new);
 
     bat::assets::build(source_dir, cache_dir)
 }
@@ -42,8 +41,7 @@ fn run_cache_subcommand(
 ) -> Result<()> {
     let cache_dir = matches
         .get_one::<String>("target")
-        .map(Path::new)
-        .unwrap_or_else(|| default_cache_dir);
+        .map_or(default_cache_dir, Path::new);
 
     build_assets(matches, config_dir, cache_dir)?;
 
@@ -101,7 +99,7 @@ fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
 
         let style = config
             .colored_output
-            .then(|| Color::Green.normal())
+            .then_some(Color::Green.normal())
             .unwrap_or_default();
 
         for lang in languages {
@@ -315,7 +313,7 @@ fn handle_result(result: Result<ErrorHandling>) -> ! {
         Err(error) => {
             let mut stderr = io::stderr();
             let is_terminal = stderr.is_terminal();
-            let new_result = default_error_handler(error, &mut stderr, is_terminal);
+            let new_result = default_error_handler(&error, &mut stderr, is_terminal);
             handle_result(Ok(new_result));
         }
     })

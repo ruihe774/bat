@@ -134,7 +134,7 @@ impl SyntaxMappingBuilder {
         self.ignored_suffixes.extend(
             include!("../../assets/ignored_suffixes.ron")
                 .into_iter()
-                .map(|s| s.to_owned()),
+                .map(ToOwned::to_owned),
         );
         self
     }

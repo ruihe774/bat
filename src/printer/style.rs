@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::*;
+use crate::error::{Error, Result};
 
 #[derive(Debug)]
 pub struct UnknownStyle {
@@ -88,8 +88,9 @@ impl StyleComponent {
             }
             StyleComponent::Grid => &[StyleComponent::Grid],
             StyleComponent::Rule => &[StyleComponent::Rule],
-            StyleComponent::Header => &[StyleComponent::HeaderFilename],
-            StyleComponent::HeaderFilename => &[StyleComponent::HeaderFilename],
+            StyleComponent::Header | StyleComponent::HeaderFilename => {
+                &[StyleComponent::HeaderFilename]
+            }
             StyleComponent::LineNumbers => &[StyleComponent::LineNumbers],
             StyleComponent::Snip => &[StyleComponent::Snip],
             StyleComponent::Full => &[
@@ -115,10 +116,9 @@ impl FromStr for StyleComponent {
             "header-filename" => Ok(StyleComponent::HeaderFilename),
             "numbers" => Ok(StyleComponent::LineNumbers),
             "snip" => Ok(StyleComponent::Snip),
-            "full" => Ok(StyleComponent::Full),
-            "plain" => Ok(StyleComponent::Plain),
             // for backward compatibility, default is to full
-            "default" => Ok(StyleComponent::Full),
+            "full" | "default" => Ok(StyleComponent::Full),
+            "plain" => Ok(StyleComponent::Plain),
             _ => Err(UnknownStyle { name: s.to_owned() }.into()),
         }
     }
@@ -147,7 +147,7 @@ impl StyleComponents {
             .into_iter()
             .flat_map(|component| component.components(interactive))
             .copied()
-            .map(|component| component.into())
+            .map(Into::into)
             .collect();
         if components.contains(&StyleComponent::Grid.into())
             && components.contains(&StyleComponent::Rule.into())

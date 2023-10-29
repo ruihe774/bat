@@ -52,9 +52,7 @@ pub fn to_ansi_style(
     italics: bool,
     background_color: Option<highlighting::Color>,
 ) -> Style {
-    let mut style = if !colored {
-        Style::default()
-    } else {
+    let mut style = if colored {
         let mut color = Style {
             foreground: to_ansi_color(style.foreground, true_color),
             ..Style::default()
@@ -69,6 +67,8 @@ pub fn to_ansi_style(
             color = color.italic();
         }
         color
+    } else {
+        Style::default()
     };
 
     style.background = background_color.and_then(|c| to_ansi_color(c, true_color));

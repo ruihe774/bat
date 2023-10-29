@@ -3,7 +3,7 @@ use std::env;
 use serde::{Deserialize, Serialize};
 
 use crate::config::get_env_var;
-use crate::error::*;
+use crate::error::{Context, Result};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PagingMode {
@@ -59,9 +59,8 @@ impl PagerKind {
         let current_bin = env::args_os().next();
 
         // Check if the current running binary is set to be our pager.
-        let is_current_bin_pager = current_bin
-            .map(|s| Path::new(&s).file_stem() == pager_bin)
-            .unwrap_or(false);
+        let is_current_bin_pager =
+            current_bin.is_some_and(|s| Path::new(&s).file_stem() == pager_bin);
 
         match pager_bin.and_then(|s| s.to_str()) {
             Some("less") => PagerKind::Less,

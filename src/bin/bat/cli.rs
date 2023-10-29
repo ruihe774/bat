@@ -46,7 +46,7 @@ pub fn get_inputs(matches: &ArgMatches) -> Result<Vec<Input>> {
         filenames
             .as_ref()
             .and_then(|filenames| filenames.get(i))
-            .map(|s| *s)
+            .copied()
     });
 
     if let Some(files) = files {
@@ -54,7 +54,7 @@ pub fn get_inputs(matches: &ArgMatches) -> Result<Vec<Input>> {
             .into_iter()
             .zip(filenames)
             .map(|(file, name)| {
-                if file.to_str().unwrap_or_default() == "-" {
+                if file.to_str().is_some_and(|s| s == "-") {
                     new_stdin_input(name)
                 } else {
                     new_file_input(file, name)
@@ -62,7 +62,7 @@ pub fn get_inputs(matches: &ArgMatches) -> Result<Vec<Input>> {
             })
             .collect())
     } else {
-        Ok(vec![new_stdin_input(filenames.next().unwrap_or(None))])
+        Ok(vec![new_stdin_input(filenames.next().unwrap_or_default())])
     }
 }
 
@@ -73,15 +73,11 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
         parse_config_file(config_path)?
     };
 
-    if let language @ Some(_) = matches
-        .get_one::<String>("language")
-        .map(|s| s.clone())
-        .or_else(|| {
-            (matches.get_flag("show-all")
-                || matches.get_one::<String>("nonprintable-notation").is_some())
-            .then(|| "show-nonprintable".to_owned())
-        })
-    {
+    if let language @ Some(_) = matches.get_one::<String>("language").cloned().or_else(|| {
+        (matches.get_flag("show-all")
+            || matches.get_one::<String>("nonprintable-notation").is_some())
+        .then(|| "show-nonprintable".to_owned())
+    }) {
         config.language = language
     }
 

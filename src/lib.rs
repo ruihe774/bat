@@ -8,6 +8,18 @@
 //! internal modules is much more likely to change. Some or all of these
 //! modules might be removed in the future.
 
+#![warn(clippy::pedantic)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::enum_glob_use)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::struct_excessive_bools)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::default_trait_access)]
+
 pub mod assets;
 pub mod config;
 pub mod controller;

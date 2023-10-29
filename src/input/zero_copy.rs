@@ -14,19 +14,19 @@ struct TolerentAllocator;
 unsafe impl GlobalAlloc for TolerentAllocator {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        mi_malloc_aligned(layout.size(), layout.align()) as *mut u8
+        mi_malloc_aligned(layout.size(), layout.align()).cast::<u8>()
     }
 
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        mi_zalloc_aligned(layout.size(), layout.align()) as *mut u8
+        mi_zalloc_aligned(layout.size(), layout.align()).cast::<u8>()
     }
 
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        let p = ptr as *mut c_void;
+        let p = ptr.cast::<c_void>();
         if mi_is_in_heap_region(p) {
-            mi_realloc_aligned(p, new_size, layout.align()) as *mut u8
+            mi_realloc_aligned(p, new_size, layout.align()).cast::<u8>()
         } else {
             GlobalAlloc::realloc(self, ptr, layout, new_size)
         }
@@ -34,9 +34,9 @@ unsafe impl GlobalAlloc for TolerentAllocator {
 
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        let p = ptr as *mut c_void;
+        let p = ptr.cast::<c_void>();
         if mi_is_in_heap_region(p) {
-            mi_free(p)
+            mi_free(p);
         }
     }
 }
@@ -62,7 +62,7 @@ impl LeakySliceReader {
         let ptr = slice.as_mut_ptr();
         let len = slice.len();
         assert!(
-            unsafe { !mi_is_in_heap_region(ptr as *mut c_void) },
+            unsafe { !mi_is_in_heap_region(ptr.cast::<c_void>()) },
             "slice not leaky"
         );
         LeakySliceReader { ptr, len }

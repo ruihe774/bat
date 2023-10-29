@@ -194,6 +194,7 @@ default-features = false
 features = ["term"]
 
 [profile.release]
-lto = "thin"
 codegen-units = 1
+lto = "thin"
 panic = "abort"
+strip = true

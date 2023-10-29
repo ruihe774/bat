@@ -1,31 +1,28 @@
-use clap::{crate_name, crate_version, value_parser, Arg, ArgAction, Command};
-use once_cell::sync::Lazy;
+use clap::{crate_authors, crate_description, crate_name, crate_version, value_parser};
+use clap::{Arg, ArgAction, Command};
 use std::env;
+use std::ffi::OsString;
 use std::path::PathBuf;
-
-static VERSION: Lazy<String> = Lazy::new(|| {
-    #[cfg(feature = "bugreport")]
-    let git_version = bugreport::git_version!(fallback = "");
-    #[cfg(not(feature = "bugreport"))]
-    let git_version = "";
-
-    if git_version.is_empty() {
-        crate_version!().to_string()
-    } else {
-        format!("{} ({})", crate_version!(), git_version)
-    }
-});
 
 pub fn build_app() -> Command {
     let mut app = Command::new(crate_name!())
-        .version(VERSION.as_str())
+        .version(
+            #[cfg(feature = "bugreport")]
+            Some(bugreport::git_version!(fallback = ""))
+                .filter(|s| !s.is_empty())
+                .map(|git_version| {
+                    let version: &str = format!("{} ({})", crate_version!(), git_version).leak();
+                    version
+                })
+                .unwrap_or(crate_version!()),
+            #[cfg(not(feature = "bugreport"))]
+            crate_version!(),
+        )
+        .about(crate_description!())
+        .author(crate_authors!())
         .hide_possible_values(true)
         .args_conflicts_with_subcommands(true)
-        .allow_external_subcommands(true)
         .disable_help_subcommand(true)
-        .max_term_width(100)
-        .about("A cat(1) clone with wings.")
-        .long_about("A cat(1) clone with syntax highlighting and Git integration.")
         .arg(
             Arg::new("FILE")
                 .help("File(s) to print / concatenate. Use '-' for standard input.")
@@ -53,7 +50,6 @@ pub fn build_app() -> Command {
         .arg(
             Arg::new("nonprintable-notation")
                 .long("nonprintable-notation")
-                .action(ArgAction::Set)
                 .value_parser(["unicode", "caret"])
                 .value_name("notation")
                 .help("Set notation for non-printable characters.")
@@ -114,7 +110,7 @@ pub fn build_app() -> Command {
                 .long("file-name")
                 .action(ArgAction::Append)
                 .value_name("name")
-                .value_parser(value_parser!(PathBuf))
+                .value_parser(value_parser!(OsString))
                 .help("Specify the name to display for a file.")
                 .long_help(
                     "Specify the name to display for a file. Useful when piping \
@@ -122,27 +118,18 @@ pub fn build_app() -> Command {
                      the filename. Note that the provided file name is also \
                      used for syntax detection.",
                 ),
-        );
-
-    app = app.arg(
-        Arg::new("tabs")
-            .long("tabs")
-            .overrides_with("tabs")
-            .value_name("T")
-            .value_parser(
-                |t: &str| {
-                    t.parse::<u32>()
-                        .map_err(|_t| "must be a number")
-                        .map(|_t| t.to_owned()) // Convert to Result<String, &str>
-                        .map_err(|e| e.to_string())
-                }, // Convert to Result<(), String>
-            )
-            .help("Set the tab width to T spaces.")
-            .long_help(
-                "Set the tab width to T spaces. Use a width of 0 to pass tabs through \
-                     directly",
-            ),
-    )
+        )
+        .arg(
+            Arg::new("tabs")
+                .long("tabs")
+                .overrides_with("tabs")
+                .value_name("T")
+                .value_parser(value_parser!(usize))
+                .help("Set the tab width to T spaces.")
+                .long_help(
+                    "Set the tab width to T spaces. Use a width of 0 to pass tabs through directly",
+                ),
+        )
         .arg(
             Arg::new("wrap")
                 .long("wrap")
@@ -161,19 +148,8 @@ pub fn build_app() -> Command {
                 .long("terminal-width")
                 .value_name("width")
                 .hide_short_help(true)
-                .allow_hyphen_values(true)
-                .value_parser(
-                    |t: &str| {
-                        let is_offset = t.starts_with('+') || t.starts_with('-');
-                        t.parse::<i32>()
-                            .map_err(|_e| "must be an offset or number")
-                            .and_then(|v| if v == 0 && !is_offset {
-                                Err("terminal width cannot be zero")
-                            } else {
-                                Ok(t.to_owned())
-                            })
-                            .map_err(|e| e.to_string())
-                    })
+                .allow_negative_numbers(true)
+                .value_parser(value_parser!(isize))
                 .help(
                     "Explicitly set the width of the terminal instead of determining it \
                      automatically. If prefixed with '+' or '-', the value will be treated \
@@ -360,7 +336,7 @@ pub fn build_app() -> Command {
                     });
 
                     if let Some(invalid) = invalid_vals.next() {
-                        Err(format!("Unknown style, '{}'", invalid))
+                        Err(format!("unknown style '{}'", invalid))
                     } else {
                         Ok(val.to_owned())
                     }
@@ -574,10 +550,6 @@ pub fn build_app() -> Command {
                         .requires("build")
                         .help("Build acknowledgements.bin."),
                 ),
-        )
-        .after_long_help(
-            "You can use 'bat cache' to customize syntaxes and themes. \
-            See 'bat cache --help' for more information",
         )
     };
 }

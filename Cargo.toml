@@ -1,7 +1,10 @@
 [package]
-authors = ["David Peter <mail@david-peter.de>"]
+authors = [
+    "David Peter <mail@david-peter.de>",
+    "Misaki Kasumi <misakikasumi@outlook.com>",
+]
 categories = ["command-line-utilities"]
-description = "A cat(1) clone with wings."
+description = "A cat(1) clone with wings. MSK mod."
 homepage = "https://github.com/sharkdp/bat"
 license = "MIT OR Apache-2.0"
 name = "bat"

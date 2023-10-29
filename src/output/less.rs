@@ -31,7 +31,7 @@ fn parse_less_version(output: &[u8]) -> Option<LessVersion> {
             let version = &version[..len];
             std::str::from_utf8(version).unwrap().parse().ok()
         })
-        .map(|version| LessVersion::Less(version))
+        .map(LessVersion::Less)
 }
 
 fn parse_less_version_busybox(output: &[u8]) -> Option<LessVersion> {

@@ -25,17 +25,12 @@ pub mod style;
 mod terminal;
 mod vscreen;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WrappingMode {
     Character,
     // The bool specifies whether wrapping has been explicitly disabled by the user via --wrap=never
+    #[default]
     NoWrapping,
-}
-
-impl Default for WrappingMode {
-    fn default() -> Self {
-        WrappingMode::NoWrapping
-    }
 }
 
 #[allow(type_alias_bounds)]
@@ -409,7 +404,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             if let Some(ContentType::Binary(Some(ref binary_type))) = self.content_type {
                 writeln!(handle, " {}", binary_type)?;
             } else {
-                writeln!(handle, "")?;
+                writeln!(handle)?;
             }
         };
 

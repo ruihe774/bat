@@ -84,7 +84,7 @@ impl Attributes {
     /// Update the attributes with an escape sequence.
     /// Returns `false` if the sequence is unsupported.
     pub fn update(&mut self, sequence: &str) -> bool {
-        if let Some(t) = sequence.bytes().nth(1) {
+        if let Some(t) = sequence.as_bytes().get(1) {
             match t {
                 b'(' => self.update_with_charset('(', &sequence[2..]),
                 b')' => self.update_with_charset(')', &sequence[2..]),
@@ -195,7 +195,7 @@ impl Attributes {
         true
     }
 
-    fn parse_color(out: &mut String, color: u16, parameters: &mut impl Iterator<Item = u16>) -> () {
+    fn parse_color(out: &mut String, color: u16, parameters: &mut impl Iterator<Item = u16>) {
         match color % 10 {
             8 => match parameters.next() {
                 Some(5) /* 256-color */ => {

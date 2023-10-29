@@ -171,7 +171,7 @@ impl OutputType {
                 }
             })
             .map(|(child, stdin)| OutputType::Pager(child, Some(io::LineWriter::new(stdin))))
-            .unwrap_or_else(|| OutputType::stdout()))
+            .unwrap_or_else(OutputType::stdout))
     }
 
     pub fn stdout() -> Self {

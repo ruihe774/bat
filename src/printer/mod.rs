@@ -318,12 +318,14 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                 .map_or(false, |content_type| content_type.is_binary())
                 && self.config.nonprintable_notation.is_none()
             {
+                let warning_color = TermColor::Yellow;
                 writeln!(
                     handle,
-                    "{}: Binary content from {} will not be printed to the terminal \
+                    "{}[bat warning]{}: Binary content from {} will not be printed to the terminal \
                      (but will be present if the output of 'bat' is piped). You can use 'bat -A' \
                      to show the binary file contents.",
-                    TermColor::Yellow.paint("[bat warning]"),
+                    warning_color.prefix(),
+                    warning_color.suffix(),
                     if &input.description.kind == "File" {
                         format!(
                             "file '{}'",

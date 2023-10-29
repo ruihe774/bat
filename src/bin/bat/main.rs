@@ -15,7 +15,6 @@ use bat::controller::{default_error_handler, Controller, ErrorHandling};
 use bat::error::*;
 use bat::input::Input;
 use bat::printer::style::StyleComponents;
-use bat::raise_error;
 
 use crate::config::{config_file_path, generate_config_file};
 // #[cfg(feature = "bugreport")]
@@ -133,8 +132,12 @@ fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
     Ok(result)
 }
 
-fn list_languages(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> ErrorHandling {
-    let languages: String = raise_error!(get_languages(&config, cache_dir));
+fn list_languages(
+    mut config: Config,
+    _config_dir: &Path,
+    cache_dir: &Path,
+) -> Result<ErrorHandling> {
+    let languages: String = get_languages(&config, cache_dir)?;
     let inputs: Vec<Input> = vec![Input::from_reader(io::Cursor::<Vec<u8>>::new(
         languages.into(),
     ))];
@@ -142,8 +145,8 @@ fn list_languages(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> E
     run_controller(inputs, &config, cache_dir)
 }
 
-fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> ErrorHandling {
-    let assets = raise_error!(HighlightingAssets::new(cache_dir));
+fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> Result<ErrorHandling> {
+    let assets = HighlightingAssets::new(cache_dir)?;
     config.language = Some("Rust".to_owned());
     config.style_components = StyleComponents::plain().expand(false).unwrap();
 
@@ -155,7 +158,7 @@ fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> Erro
                 Controller::new(&config, &assets).run(vec![Input::from_reader(
                     include_bytes!("../../../assets/theme_preview.rs").as_slice()
                 )]),
-                ErrorHandling::NoError
+                Ok(ErrorHandling::NoError)
             ));
             println!();
         }
@@ -165,11 +168,11 @@ fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> Erro
         }
     }
 
-    ErrorHandling::NoError
+    Ok(ErrorHandling::NoError)
 }
 
-fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> ErrorHandling {
-    let assets = raise_error!(HighlightingAssets::new(cache_dir));
+fn run_controller(inputs: Vec<Input>, config: &Config, cache_dir: &Path) -> Result<ErrorHandling> {
+    let assets = HighlightingAssets::new(cache_dir)?;
     let controller = Controller::new(config, &assets);
     controller.run(inputs)
 }
@@ -227,19 +230,19 @@ fn invoke_bugreport(matches: &ArgMatches, config_dir: &Path, cache_dir: &Path) {
 
 /// Returns `Err(..)` upon fatal errors. Otherwise, returns `Ok(true)` on full success and
 /// `Ok(false)` if any intermediate errors occurred (were printed).
-fn run() -> ErrorHandling {
+fn run() -> Result<ErrorHandling> {
     #[cfg(windows)]
     let _ = nu_ansi_term::enable_ansi_support();
 
     let matches = cli::get_matches();
-    let cache_dir = raise_error!(get_cache_dir());
-    let config_dir = raise_error!(get_config_dir());
+    let cache_dir = get_cache_dir()?;
+    let config_dir = get_config_dir()?;
     let config_file = config_file_path(&config_dir);
 
     #[cfg(feature = "bugreport")]
     if matches.get_flag("diagnostic") {
         invoke_bugreport(&matches, &config_dir, &cache_dir);
-        return ErrorHandling::NoError;
+        return Ok(ErrorHandling::NoError);
     }
 
     match matches.subcommand() {
@@ -259,8 +262,8 @@ fn run() -> ErrorHandling {
             }
         }
         _ => {
-            let inputs = raise_error!(cli::get_inputs(&matches));
-            let config = raise_error!(cli::get_config(&matches, &config_file));
+            let inputs = cli::get_inputs(&matches)?;
+            let config = cli::get_config(&matches, &config_file)?;
 
             if matches.get_flag("list-languages") {
                 list_languages(config.consolidate(&inputs), &config_dir, &cache_dir)
@@ -268,19 +271,19 @@ fn run() -> ErrorHandling {
                 list_themes(config.consolidate(&inputs), &config_dir, &cache_dir)
             } else if matches.get_flag("config-file") {
                 println!("{}", config_file.display());
-                ErrorHandling::NoError
+                Ok(ErrorHandling::NoError)
             } else if matches.get_flag("generate-config-file") {
-                raise_error!(generate_config_file(&config, &config_file));
-                ErrorHandling::NoError
+                generate_config_file(&config, &config_file)?;
+                Ok(ErrorHandling::NoError)
             } else if matches.get_flag("config-dir") {
                 println!("{}", config_dir.display());
-                ErrorHandling::NoError
+                Ok(ErrorHandling::NoError)
             } else if matches.get_flag("cache-dir") {
                 println!("{}", cache_dir.display());
-                ErrorHandling::NoError
+                Ok(ErrorHandling::NoError)
             } else if matches.get_flag("acknowledgements") {
                 println!("{}", get_acknowledgements());
-                ErrorHandling::NoError
+                Ok(ErrorHandling::NoError)
             } else {
                 let config = config.consolidate(&inputs);
                 run_controller(inputs, &config, &cache_dir)
@@ -305,19 +308,15 @@ fn get_config_dir() -> Result<PathBuf> {
     })
 }
 
-fn handle_result(result: ErrorHandling) -> ! {
+fn handle_result(result: Result<ErrorHandling>) -> ! {
     process::exit(match result {
-        ErrorHandling::NoError | ErrorHandling::SilentFail => 0,
-        ErrorHandling::Handled => 1,
-        ErrorHandling::Raised(error) => {
+        Ok(ErrorHandling::NoError) | Ok(ErrorHandling::SilentFail) => 0,
+        Ok(ErrorHandling::Handled) => 1,
+        Err(error) => {
             let mut stderr = io::stderr();
             let is_terminal = stderr.is_terminal();
             let new_result = default_error_handler(error, &mut stderr, is_terminal);
-            assert!(
-                !matches!(new_result, ErrorHandling::Raised(_)),
-                "default error handler cannot raise error"
-            );
-            handle_result(new_result);
+            handle_result(Ok(new_result));
         }
     })
 }

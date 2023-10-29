@@ -13,24 +13,11 @@ use line_range::{LineRanges, RangeCheckResult};
 
 pub mod line_range;
 
-#[derive(Debug)]
-#[must_use]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ErrorHandling {
     NoError,
     Handled,
-    Raised(Error),
     SilentFail,
-}
-
-#[macro_export]
-macro_rules! raise_error {
-    ($expr:expr $(,)?) => {{
-        use $crate::controller::ErrorHandling;
-        match $expr {
-            Ok(v) => v,
-            Err(e) => return ErrorHandling::Raised(e.into()),
-        }
-    }};
 }
 
 pub fn default_error_handler(
@@ -68,7 +55,7 @@ impl<'a> Controller<'a> {
         Controller { config, assets }
     }
 
-    pub fn run(&self, inputs: Vec<Input>) -> ErrorHandling {
+    pub fn run(&self, inputs: Vec<Input>) -> Result<ErrorHandling> {
         self.run_with_options(inputs, Option::<&mut Vec<u8>>::None, default_error_handler)
     }
 
@@ -77,18 +64,18 @@ impl<'a> Controller<'a> {
         inputs: Vec<Input>,
         mut output_buffer: Option<&mut impl Write>,
         handle_error: impl Fn(Error, &mut dyn Write, bool) -> ErrorHandling,
-    ) -> ErrorHandling {
+    ) -> Result<ErrorHandling> {
         let panel_width = (!self.config.loop_through)
             .then(|| InteractivePrinter::get_panel_width(&self.config))
             .unwrap_or_default();
 
         #[cfg(feature = "paging")]
         let mut output_type = if output_buffer.is_none() {
-            Some(raise_error!(OutputType::from_mode(
+            Some(OutputType::from_mode(
                 self.config.paging_mode,
                 &self.config,
                 panel_width,
-            )))
+            )?)
         } else {
             None
         };
@@ -127,7 +114,7 @@ impl<'a> Controller<'a> {
                 if output_buffer.is_some() {
                     // It doesn't make much sense to send errors straight to stderr if the user
                     // provided their own buffer, so we just return it.
-                    return ErrorHandling::Raised(error);
+                    return Err(error);
                 } else {
                     let output_type = output_type.as_mut().unwrap();
                     match if output_type.is_pager() {
@@ -138,18 +125,18 @@ impl<'a> Controller<'a> {
                         handle_error(error, &mut stderr, is_terminal)
                     } {
                         ErrorHandling::Handled | ErrorHandling::NoError => (),
-                        h @ _ => return h,
+                        ErrorHandling::SilentFail => return Ok(ErrorHandling::SilentFail),
                     }
                 }
                 no_errors = false;
             }
         }
 
-        if no_errors {
+        Ok(if no_errors {
             ErrorHandling::NoError
         } else {
             ErrorHandling::Handled
-        }
+        })
     }
 
     fn print_input<W: Write>(

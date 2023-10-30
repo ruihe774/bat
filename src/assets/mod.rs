@@ -128,6 +128,7 @@ impl HighlightingAssets {
     }
 
     #[cfg(debug_assertions)]
+    #[doc(hidden)]
     pub fn with_no_cache() -> Self {
         HighlightingAssets {
             syntax_set: include_asset!("../../assets/syntaxes.gz", Option::<&Path>::None).unwrap(),

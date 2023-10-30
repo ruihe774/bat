@@ -190,6 +190,7 @@ pub(crate) fn get_env_var(key: &str) -> Result<Option<String>> {
     feature = "paging",
     feature = "bugreport"
 ))]
+#[doc(hidden)]
 pub fn get_pager_executable(config_pager: Option<&str>) -> Option<String> {
     crate::output::pager::get_pager(config_pager)
         .ok()

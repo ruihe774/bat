@@ -4,9 +4,8 @@ use std::io::{self, BufRead, Read};
 use std::mem::forget;
 
 use bincode::BincodeRead;
-use libmimalloc_sys::{
-    mi_free, mi_is_in_heap_region, mi_malloc_aligned, mi_realloc_aligned, mi_zalloc_aligned,
-};
+#[allow(clippy::wildcard_imports)] // too many imports
+use libmimalloc_sys::*;
 use memmap2::MmapMut;
 
 struct TolerentAllocator;
@@ -33,10 +32,10 @@ unsafe impl GlobalAlloc for TolerentAllocator {
     }
 
     #[inline]
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let p = ptr.cast::<c_void>();
         if mi_is_in_heap_region(p) {
-            mi_free(p);
+            mi_free_size_aligned(p, layout.size(), layout.align());
         }
     }
 }

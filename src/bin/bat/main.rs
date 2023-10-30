@@ -146,7 +146,7 @@ fn list_languages(
 fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> Result<ErrorHandling> {
     let assets = HighlightingAssets::new(cache_dir)?;
     config.language = Some("Rust".to_owned());
-    config.style_components = StyleComponents::plain().expand(false).unwrap();
+    config.style_components = StyleComponents::plain().consolidate(false).unwrap();
 
     if config.colored_output && !config.loop_through {
         for theme in assets.themes() {
@@ -264,9 +264,9 @@ fn run() -> Result<ErrorHandling> {
             let config = cli::get_config(&matches, &config_file)?;
 
             if matches.get_flag("list-languages") {
-                list_languages(config.consolidate(&inputs), &config_dir, &cache_dir)
+                list_languages(config.consolidate(&inputs)?, &config_dir, &cache_dir)
             } else if matches.get_flag("list-themes") {
-                list_themes(config.consolidate(&inputs), &config_dir, &cache_dir)
+                list_themes(config.consolidate(&inputs)?, &config_dir, &cache_dir)
             } else if matches.get_flag("config-file") {
                 println!("{}", config_file.display());
                 Ok(ErrorHandling::NoError)
@@ -283,7 +283,7 @@ fn run() -> Result<ErrorHandling> {
                 println!("{}", get_acknowledgements());
                 Ok(ErrorHandling::NoError)
             } else {
-                let config = config.consolidate(&inputs);
+                let config = config.consolidate(&inputs)?;
                 run_controller(inputs, &config, &cache_dir)
             }
         }

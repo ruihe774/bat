@@ -20,7 +20,7 @@ use crate::input::{InputReader, OpenedInput};
 #[cfg(feature = "guesslang")]
 use guesslang::GuessLang;
 use lazy_theme_set::LazyThemeSet;
-use syntax_mapping::{MappingTarget, SyntaxMapping};
+use syntax_mapping::{ConsolidatedSyntaxMapping, MappingTarget};
 
 #[cfg(feature = "build-assets")]
 pub mod build_assets;
@@ -218,7 +218,7 @@ impl HighlightingAssets {
     pub fn get_syntax_for_path(
         &self,
         path: impl AsRef<Path>,
-        mapping: &SyntaxMapping,
+        mapping: &ConsolidatedSyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
         let path = path.as_ref();
         let undetected = || {
@@ -276,7 +276,7 @@ impl HighlightingAssets {
         &self,
         language: Option<&str>,
         input: &mut OpenedInput,
-        mapping: &SyntaxMapping,
+        mapping: &ConsolidatedSyntaxMapping,
     ) -> Result<SyntaxReferenceInSet> {
         if let Some(language) = language {
             return self
@@ -535,20 +535,20 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::input::Input;
-    use syntax_mapping::SyntaxMappingBuilder;
+    use syntax_mapping::SyntaxMapping;
 
     struct SyntaxDetectionTest {
         assets: HighlightingAssets,
-        pub syntax_mapping: SyntaxMapping,
+        pub syntax_mapping: ConsolidatedSyntaxMapping,
         pub temp_dir: TempDir,
     }
 
     impl SyntaxDetectionTest {
-        fn new(syntax_mapping: Option<SyntaxMapping>) -> Self {
+        fn new(syntax_mapping: Option<ConsolidatedSyntaxMapping>) -> Self {
             SyntaxDetectionTest {
                 assets: HighlightingAssets::with_no_cache(),
                 syntax_mapping: syntax_mapping
-                    .unwrap_or_else(|| SyntaxMappingBuilder::new().with_builtin().build().unwrap()),
+                    .unwrap_or_else(|| SyntaxMapping::default().consolidate().unwrap()),
                 temp_dir: TempDir::new().expect("creation of temporary directory"),
             }
         }
@@ -557,7 +557,7 @@ mod tests {
             &self,
             language: Option<&str>,
             input: &mut OpenedInput,
-            mapping: &SyntaxMapping,
+            mapping: &ConsolidatedSyntaxMapping,
         ) -> String {
             self.assets
                 .get_syntax(language, input, mapping)
@@ -661,16 +661,12 @@ mod tests {
 
     #[test]
     fn syntax_detection_same_for_inputkinds() {
-        let test = SyntaxDetectionTest::new(Some(
-            SyntaxMappingBuilder::new()
-                .with_builtin()
-                .map_syntax("*.myext", MappingTarget::MapTo("C"))
-                .unwrap()
-                .map_syntax("MY_FILE", MappingTarget::MapTo("Markdown"))
-                .unwrap()
-                .build()
-                .unwrap(),
-        ));
+        let test = SyntaxDetectionTest::new(Some({
+            let mut mapping = SyntaxMapping::default();
+            mapping.map_syntax("*.myext", MappingTarget::MapTo("C"));
+            mapping.map_syntax("MY_FILE", MappingTarget::MapTo("Markdown"));
+            mapping.consolidate().unwrap()
+        }));
 
         assert!(test.syntax_is_same_for_inputkinds("Test.md", ""));
         assert!(test.syntax_is_same_for_inputkinds("Test.txt", "#!/bin/bash"));
@@ -718,14 +714,11 @@ mod tests {
             "C++"
         );
         assert_eq!(
-            SyntaxDetectionTest::new(Some(
-                SyntaxMappingBuilder::new()
-                    .with_builtin()
-                    .map_syntax("*.h", MappingTarget::MapTo("C"))
-                    .unwrap()
-                    .build()
-                    .unwrap()
-            ))
+            SyntaxDetectionTest::new(Some({
+                let mut mapping = SyntaxMapping::default();
+                mapping.map_syntax("*.h", MappingTarget::MapTo("C"));
+                mapping.consolidate().unwrap()
+            }))
             .syntax_for_file("test.h"),
             "C"
         );
@@ -748,14 +741,11 @@ mod tests {
             "Plain Text"
         );
 
-        let test = SyntaxDetectionTest::new(Some(
-            SyntaxMappingBuilder::new()
-                .with_builtin()
-                .map_syntax("*.txt", MappingTarget::MapExtensionToUnknown)
-                .unwrap()
-                .build()
-                .unwrap(),
-        ));
+        let test = SyntaxDetectionTest::new(Some({
+            let mut mapping = SyntaxMapping::default();
+            mapping.map_syntax("*.txt", MappingTarget::MapExtensionToUnknown);
+            mapping.consolidate().unwrap()
+        }));
 
         // If we setup MapExtensionToUnknown on *.txt, the match on the full
         // file name of "CMakeLists.txt" shall have higher prio, and CMake shall
@@ -783,14 +773,11 @@ mod tests {
         assert_eq!(test.syntax_for_file("README.MD"), "Markdown");
 
         // // Adding a mapping for "MD" in addition to "md" should not break the mapping
-        let test = SyntaxDetectionTest::new(Some(
-            SyntaxMappingBuilder::new()
-                .with_builtin()
-                .map_syntax("*.MD", MappingTarget::MapTo("Markdown"))
-                .unwrap()
-                .build()
-                .unwrap(),
-        ));
+        let test = SyntaxDetectionTest::new(Some({
+            let mut mapping = SyntaxMapping::default();
+            mapping.map_syntax("*.MD", MappingTarget::MapTo("Markdown"));
+            mapping.consolidate().unwrap()
+        }));
 
         assert_eq!(test.syntax_for_file("README.md"), "Markdown");
         assert_eq!(test.syntax_for_file("README.mD"), "Markdown");

@@ -3,10 +3,11 @@ use std::{ffi::OsString, path::Path};
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, Anchored, Input, MatchKind, StartKind};
 use globset::{Candidate, Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use os_str_bytes::RawOsString;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MappingTarget {
     /// For mapping a path to a specific syntax.
     MapTo(&'static str),
@@ -26,20 +27,20 @@ pub enum MappingTarget {
 }
 
 #[derive(Debug, Clone)]
-pub struct SyntaxMapping {
+pub struct ConsolidatedSyntaxMapping {
     targets: Vec<MappingTarget>,
     globset: GlobSet,
     ignored_suffixes: AhoCorasick,
 }
 
-impl SyntaxMapping {
-    pub fn new(
-        mapping: impl IntoIterator<Item = (Glob, MappingTarget)>,
+impl ConsolidatedSyntaxMapping {
+    fn new(
+        mapped_syntaxes: impl IntoIterator<Item = (Glob, MappingTarget)>,
         ignored_suffixes: impl IntoIterator<Item = String>,
     ) -> Result<Self> {
         let mut builder = GlobSetBuilder::new();
-        Ok(SyntaxMapping {
-            targets: mapping
+        Ok(ConsolidatedSyntaxMapping {
+            targets: mapped_syntaxes
                 .into_iter()
                 .map(|(glob, target)| {
                     builder.add(glob);
@@ -89,79 +90,101 @@ impl SyntaxMapping {
     }
 }
 
-impl Default for SyntaxMapping {
-    fn default() -> Self {
-        let patterns: [&[u8]; 0] = [];
-        SyntaxMapping {
-            targets: Default::default(),
-            globset: Default::default(),
-            ignored_suffixes: AhoCorasick::new(patterns).unwrap(),
-        }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyntaxMapping {
+    use_builtins: bool,
+    #[serde(deserialize_with = "deserialize_leaky_mapped_syntaxes")]
+    mapped_syntaxes: Vec<(String, MappingTarget)>,
+    ignored_suffixes: Vec<String>,
+}
+
+impl SyntaxMapping {
+    pub fn consolidate(self) -> Result<ConsolidatedSyntaxMapping> {
+        use MappingTarget::*;
+        ConsolidatedSyntaxMapping::new(
+            {
+                let iter = if self.use_builtins {
+                    include!("../../assets/syntax_mapping.ron").as_slice()
+                } else {
+                    &[]
+                }
+                .iter()
+                .copied()
+                .chain(self.mapped_syntaxes.iter().map(|(s, t)| (s.as_str(), *t)))
+                .map(|(s, t)| {
+                    GlobBuilder::new(s)
+                        .case_insensitive(true)
+                        .literal_separator(true)
+                        .build()
+                        .map(|g| (g, t))
+                });
+                let mut mapped_syntaxes = Vec::with_capacity(iter.size_hint().0);
+                for mapping in iter {
+                    mapped_syntaxes.push(mapping?);
+                }
+                mapped_syntaxes
+            },
+            if self.use_builtins {
+                include!("../../assets/ignored_suffixes.ron").as_slice()
+            } else {
+                &[]
+            }
+            .iter()
+            .copied()
+            .map(ToOwned::to_owned)
+            .chain(self.ignored_suffixes),
+        )
+    }
+
+    pub fn map_syntax(&mut self, glob: impl Into<String>, target: MappingTarget) {
+        self.mapped_syntaxes.push((glob.into(), target));
+    }
+
+    pub fn ignore_suffix(&mut self, suffix: impl Into<String>) {
+        self.ignored_suffixes.push(suffix.into());
+    }
+
+    pub fn use_builtins(&mut self, yes: bool) {
+        self.use_builtins = yes;
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct SyntaxMappingBuilder {
-    pub mapping: Vec<(Glob, MappingTarget)>,
-    pub ignored_suffixes: Vec<String>,
-}
-
-impl SyntaxMappingBuilder {
-    pub fn new() -> Self {
-        SyntaxMappingBuilder {
-            mapping: Vec::new(),
+impl Default for SyntaxMapping {
+    fn default() -> Self {
+        SyntaxMapping {
+            use_builtins: true,
+            mapped_syntaxes: Vec::new(),
             ignored_suffixes: Vec::new(),
         }
     }
-
-    pub fn with_builtin(mut self) -> Self {
-        use MappingTarget::*;
-        self.mapping
-            .extend(
-                include!("../../assets/syntax_mapping.ron")
-                    .into_iter()
-                    .map(|(s, t)| {
-                        (
-                            GlobBuilder::new(s)
-                                .case_insensitive(true)
-                                .literal_separator(true)
-                                .build()
-                                .expect("invalid builtin syntax mapping"),
-                            t,
-                        )
-                    }),
-            );
-        self.ignored_suffixes.extend(
-            include!("../../assets/ignored_suffixes.ron")
-                .into_iter()
-                .map(ToOwned::to_owned),
-        );
-        self
-    }
-
-    pub fn build(self) -> Result<SyntaxMapping> {
-        SyntaxMapping::new(self.mapping, self.ignored_suffixes)
-    }
-
-    pub fn map_syntax(mut self, glob: &'_ str, target: MappingTarget) -> Result<Self> {
-        self.mapping.push((
-            GlobBuilder::new(glob)
-                .case_insensitive(true)
-                .literal_separator(true)
-                .build()?,
-            target,
-        ));
-        Ok(self)
-    }
-
-    pub fn ignored_suffix(mut self, suffix: String) -> Self {
-        self.ignored_suffixes.push(suffix);
-        self
-    }
 }
 
-impl Default for SyntaxMappingBuilder {
-    fn default() -> Self {
-        Self::new()
+fn deserialize_leaky_mapped_syntaxes<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Vec<(String, MappingTarget)>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use self::MappingTarget as RealMappingTarget;
+    #[derive(Deserialize)]
+    enum MappingTarget {
+        MapTo(String),
+        MapToUnknown,
+        MapExtensionToUnknown,
     }
+    let v = Vec::<(String, MappingTarget)>::deserialize(deserializer)?;
+    Ok(v.into_iter()
+        .map(|(s, t)| {
+            (
+                s,
+                match t {
+                    MappingTarget::MapTo(s) => RealMappingTarget::MapTo(s.leak()),
+                    MappingTarget::MapToUnknown => RealMappingTarget::MapToUnknown,
+                    MappingTarget::MapExtensionToUnknown => {
+                        RealMappingTarget::MapExtensionToUnknown
+                    }
+                },
+            )
+        })
+        .collect())
 }

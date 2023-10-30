@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use clap::ArgMatches;
 
-use bat::assets::syntax_mapping::{MappingTarget, SyntaxMappingBuilder};
+use bat::assets::syntax_mapping::MappingTarget;
 use bat::config::Config;
 use bat::controller::line_range::{HighlightedLineRanges, LineRange, LineRanges, VisibleLines};
 use bat::error::*;
@@ -171,31 +171,27 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
         config.style_components = style_components;
     }
 
-    config.syntax_mapping = {
-        let mut syntax_mapping_builder = SyntaxMappingBuilder::new();
-        syntax_mapping_builder = syntax_mapping_builder.with_builtin();
-        if let Some(values) = matches.get_many::<String>("ignored-suffix") {
-            for suffix in values {
-                syntax_mapping_builder = syntax_mapping_builder.ignored_suffix(
-                    if !suffix.contains(|ch: char| !ch.is_ascii_alphanumeric()) {
-                        format!(".{}", suffix)
-                    } else {
-                        suffix.to_owned()
-                    },
-                );
-            }
+    let syntax_mapping = &mut config.syntax_mapping;
+    if let Some(values) = matches.get_many::<String>("ignored-suffix") {
+        for suffix in values {
+            syntax_mapping.ignore_suffix(
+                if !suffix.contains(|ch: char| !ch.is_ascii_alphanumeric()) {
+                    format!(".{}", suffix)
+                } else {
+                    suffix.to_owned()
+                },
+            );
         }
-        if let Some(values) = matches.get_many::<String>("map-syntax") {
-            for from_to in values {
-                let mut parts = from_to.split(':');
-                syntax_mapping_builder = syntax_mapping_builder.map_syntax(
-                    parts.next().unwrap(),
-                    MappingTarget::MapTo(parts.next().unwrap().to_owned().leak()),
-                )?;
-            }
+    }
+    if let Some(values) = matches.get_many::<String>("map-syntax") {
+        for from_to in values {
+            let mut parts = from_to.split(':');
+            syntax_mapping.map_syntax(
+                parts.next().unwrap(),
+                MappingTarget::MapTo(parts.next().unwrap().to_owned().leak()),
+            );
         }
-        syntax_mapping_builder.build()?
-    };
+    }
 
     if let pager @ Some(_) = matches.get_one::<String>("pager").map(|s| s.to_owned()) {
         config.pager = pager;

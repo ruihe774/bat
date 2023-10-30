@@ -4,103 +4,85 @@ use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
-use crate::assets::syntax_mapping::SyntaxMapping;
+use crate::assets::syntax_mapping::{ConsolidatedSyntaxMapping, SyntaxMapping};
 use crate::controller::line_range::{HighlightedLineRanges, VisibleLines};
 use crate::error::{Context, Result};
 use crate::input::{Input, InputKind};
 #[cfg(feature = "paging")]
 use crate::output::pager::PagingMode;
 use crate::printer::preprocessor::NonprintableNotation;
-use crate::printer::style::{ExpandedStyleComponents, StyleComponents};
+use crate::printer::style::{ConsolidatedStyleComponents, StyleComponents};
 use crate::printer::{TabWidth, WrappingMode};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// The explicitly configured language, if any
-    #[serde(default)]
     pub language: Option<String>,
 
     /// The configured notation for non-printable characters
-    #[serde(default)]
     pub nonprintable_notation: Option<NonprintableNotation>,
 
     /// The character width of the terminal
-    #[serde(default)]
     pub term_width: Option<NonZeroUsize>,
 
     /// The width of tab characters
     /// None will cause tabs to be passed through without expanding them.
-    #[serde(default)]
     pub tab_width: TabWidth,
 
     /// Whether or not to simply loop through all input (`cat` mode)
-    #[serde(default)]
     pub loop_through: Option<bool>,
 
     /// Whether or not the output should be colorized
-    #[serde(default)]
     pub colored_output: Option<bool>,
 
     /// Whether or not the output terminal supports true color
-    #[serde(default)]
     pub true_color: Option<bool>,
 
     /// Style elements (grid, line numbers, ...)
-    #[serde(default)]
     pub style_components: StyleComponents,
 
     /// If and how text should be wrapped
-    #[serde(default)]
     pub wrapping_mode: Option<WrappingMode>,
 
     /// Pager or STDOUT
     #[cfg(feature = "paging")]
-    #[serde(default)]
     pub paging_mode: Option<PagingMode>,
 
     /// Specifies which lines should be printed
-    #[serde(default)]
     pub visible_lines: VisibleLines,
 
     /// The syntax highlighting theme
-    #[serde(default)]
     pub theme: Option<String>,
 
     /// File extension/name mappings
-    #[serde(skip)]
     pub syntax_mapping: SyntaxMapping,
 
     /// Command to start the pager
-    #[serde(default)]
     pub pager: Option<String>,
 
     /// Whether or not to use ANSI italics
-    #[serde(default)]
     pub use_italic_text: bool,
 
     /// Ranges of lines which should be highlighted with a special background color
-    #[serde(default)]
     pub highlighted_lines: HighlightedLineRanges,
 
     /// Always show decorations
-    #[serde(default)]
     pub always_show_decorations: bool,
 
     /// Whether or not to use $LESSOPEN if set
     #[cfg(feature = "lessopen")]
-    #[serde(default)]
     pub no_lessopen: bool,
 }
 
 impl Config {
-    pub fn consolidate(self, inputs: &'_ [Input]) -> ConsolidatedConfig {
+    pub fn consolidate(self, inputs: &'_ [Input]) -> Result<ConsolidatedConfig> {
         let stdout = io::stdout();
         let is_terminal = stdout.is_terminal();
         let interactive = is_terminal || self.always_show_decorations;
-        let style = self.style_components.expand(interactive).unwrap();
+        let style = self.style_components.consolidate(interactive)?;
         let plain = style.plain();
-        ConsolidatedConfig {
+        Ok(ConsolidatedConfig {
             language: self.language,
             nonprintable_notation: self.nonprintable_notation,
             term_width: self.term_width.unwrap_or_else(|| {
@@ -142,14 +124,14 @@ impl Config {
             }),
             visible_lines: self.visible_lines,
             theme: self.theme,
-            syntax_mapping: self.syntax_mapping,
+            syntax_mapping: self.syntax_mapping.consolidate()?,
             pager: self.pager,
             use_italic_text: self.use_italic_text,
             highlighted_lines: self.highlighted_lines,
             always_show_decorations: self.always_show_decorations,
             #[cfg(feature = "lessopen")]
             no_lessopen: self.no_lessopen,
-        }
+        })
     }
 }
 
@@ -162,13 +144,13 @@ pub struct ConsolidatedConfig {
     pub loop_through: bool,
     pub colored_output: bool,
     pub true_color: bool,
-    pub style_components: ExpandedStyleComponents,
+    pub style_components: ConsolidatedStyleComponents,
     pub wrapping_mode: WrappingMode,
     #[cfg(feature = "paging")]
     pub paging_mode: PagingMode,
     pub visible_lines: VisibleLines,
     pub theme: Option<String>,
-    pub syntax_mapping: SyntaxMapping,
+    pub syntax_mapping: ConsolidatedSyntaxMapping,
     pub pager: Option<String>,
     pub use_italic_text: bool,
     pub highlighted_lines: HighlightedLineRanges,

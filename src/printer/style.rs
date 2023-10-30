@@ -141,7 +141,7 @@ impl StyleComponents {
         Self::new(vec![StyleComponent::Full])
     }
 
-    pub fn expand(self, interactive: bool) -> Result<ExpandedStyleComponents> {
+    pub fn consolidate(self, interactive: bool) -> Result<ConsolidatedStyleComponents> {
         let components: BTreeSet<_> = self
             .0
             .into_iter()
@@ -154,7 +154,7 @@ impl StyleComponents {
         {
             Err(ConflictStyle("grid".to_owned(), "rule".to_owned()).into())
         } else {
-            Ok(ExpandedStyleComponents(components))
+            Ok(ConsolidatedStyleComponents(components))
         }
     }
 }
@@ -166,9 +166,9 @@ impl Default for StyleComponents {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExpandedStyleComponents(BTreeSet<StyleComponentWrapper>);
+pub struct ConsolidatedStyleComponents(BTreeSet<StyleComponentWrapper>);
 
-impl ExpandedStyleComponents {
+impl ConsolidatedStyleComponents {
     pub fn grid(&self) -> bool {
         self.0.contains(&StyleComponent::Grid.into())
     }

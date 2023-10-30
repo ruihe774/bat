@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use clap::ArgMatches;
 
 use bat::assets::syntax_mapping::MappingTarget;
-use bat::config::Config;
+use bat::config::{leak_config_string, Config};
 use bat::controller::line_range::{HighlightedLineRanges, LineRange, LineRanges, VisibleLines};
 use bat::error::*;
 use bat::input::Input;
@@ -188,7 +188,7 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
             let mut parts = from_to.split(':');
             syntax_mapping.map_syntax(
                 parts.next().unwrap(),
-                MappingTarget::MapTo(parts.next().unwrap().to_owned().leak()),
+                MappingTarget::MapTo(leak_config_string(parts.next().unwrap().to_owned())),
             );
         }
     }

@@ -5,6 +5,7 @@ use globset::{Candidate, Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use os_str_bytes::RawOsString;
 use serde::{Deserialize, Serialize};
 
+use crate::config::leak_config_string;
 use crate::error::Result;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,7 +179,7 @@ where
             (
                 s,
                 match t {
-                    MappingTarget::MapTo(s) => RealMappingTarget::MapTo(s.leak()),
+                    MappingTarget::MapTo(s) => RealMappingTarget::MapTo(leak_config_string(s)),
                     MappingTarget::MapToUnknown => RealMappingTarget::MapToUnknown,
                     MappingTarget::MapExtensionToUnknown => {
                         RealMappingTarget::MapExtensionToUnknown

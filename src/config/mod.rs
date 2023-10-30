@@ -13,6 +13,9 @@ use crate::output::pager::PagingMode;
 use crate::printer::preprocessor::NonprintableNotation;
 use crate::printer::style::{ConsolidatedStyleComponents, StyleComponents};
 use crate::printer::{TabWidth, WrappingMode};
+pub use leak_table::leak_string as leak_config_string;
+
+mod leak_table;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]

@@ -15,6 +15,7 @@ use crate::printer::style::{ExpandedStyleComponents, StyleComponents};
 use crate::printer::{TabWidth, WrappingMode};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     /// The explicitly configured language, if any
     #[serde(default)]

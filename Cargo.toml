@@ -22,8 +22,9 @@ default = ["application"]
 application = [
     "bugreport",
     "guesslang",
-    "zero-copy",
     "lessopen",
+    "mimalloc",
+    "zero-copy",
     "minimal-application",
 ]
 
@@ -58,6 +59,11 @@ lessopen = [
 guesslang = [
     "ort",
     "ndarray",
+]
+
+# Support onnxruntime build with mimalloc
+mimalloc = [
+    "ort/mimalloc",
 ]
 
 # Support zero-copy IO

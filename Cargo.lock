@@ -750,11 +750,12 @@ checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 [[package]]
 name = "ort"
 version = "1.16.2"
-source = "git+https://github.com/ruihe774/ort.git?branch=msk#631182ff94f1f881eb631c65e874a0f1e1ece800"
+source = "git+https://github.com/ruihe774/ort.git?branch=msk#55e2248cc287150b5c5e2efd225035d0c93cf502"
 dependencies = [
  "flate2",
  "lazy_static",
  "libc",
+ "libmimalloc-sys",
  "ndarray",
  "tar",
  "thiserror",
@@ -946,9 +947,9 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rgb"
-version = "0.8.36"
+version = "0.8.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ec2d3e3fc7a92ced357df9cebd5a10b6fb2aa1ee797bf7e9ce2f17dffc8f59"
+checksum = "05aaa8004b64fd573fc9d002f4e632d51ad4f026c2b5ba95fcb6c2f32c2c47d8"
 dependencies = [
  "bytemuck",
 ]

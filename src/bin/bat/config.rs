@@ -3,6 +3,8 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
+
 use bat::config::Config;
 use bat::error::*;
 
@@ -67,16 +69,18 @@ pub fn config_file_path(config_dir: &Path) -> PathBuf {
 
 pub fn parse_config_file(user_config_file: &Path) -> Result<Config> {
     // FIXME: system config file
-    // let system_config: Option<Config> = match system_config_file.and_then(|path| File::open(path).ok()).map(io::BufReader::new) {
-    //     Some(r) => Some(ron::de::from_reader(r)?),
-    //     None => None,
-    // };
 
-    let user_config: Option<Config> =
-        match File::open(user_config_file).ok().map(io::BufReader::new) {
-            Some(r) => Some(ron::de::from_reader(r)?),
-            None => None,
-        };
+    let user_config = File::open(user_config_file)
+        .ok()
+        .map(io::BufReader::new)
+        .map(ron::de::from_reader)
+        .transpose()
+        .with_context(|| {
+            format!(
+                "failed to parse config file '{}'",
+                user_config_file.display()
+            )
+        })?;
 
     Ok(user_config.unwrap_or_default())
 }

@@ -25,6 +25,10 @@ pub fn system_config_file() -> Option<PathBuf> {
 }
 */
 
+fn ron_options() -> ron::Options {
+    ron::Options::default().with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+}
+
 pub fn generate_config_file(config: &Config, config_file: &Path) -> Result<()> {
     if config_file.exists() {
         print!(
@@ -44,7 +48,7 @@ pub fn generate_config_file(config: &Config, config_file: &Path) -> Result<()> {
         fs::create_dir_all(config_dir)?
     }
 
-    ron::ser::to_writer_pretty(
+    ron_options().to_writer_pretty(
         io::BufWriter::new(
             OpenOptions::new()
                 .write(true)
@@ -53,7 +57,7 @@ pub fn generate_config_file(config: &Config, config_file: &Path) -> Result<()> {
                 .open(config_file)?,
         ),
         config,
-        ron::ser::PrettyConfig::new().extensions(ron::extensions::Extensions::IMPLICIT_SOME),
+        Default::default(),
     )?;
 
     println!("Success! Config file written to {}", config_file.display());
@@ -73,7 +77,7 @@ pub fn parse_config_file(user_config_file: &Path) -> Result<Config> {
     let user_config = File::open(user_config_file)
         .ok()
         .map(io::BufReader::new)
-        .map(ron::de::from_reader)
+        .map(|r| ron_options().from_reader(r))
         .transpose()
         .with_context(|| {
             format!(

@@ -13,8 +13,8 @@ pub fn new_stdin_input(name: Option<&OsStr>) -> Input {
 
 fn named(mut input: Input, name: Option<&OsStr>) -> Input {
     if let Some(provided_name) = name {
-        input.description.name = Some(provided_name.to_owned());
-        input.description.kind = "File".to_owned();
+        input.description.name = Some(provided_name.into());
+        input.description.kind = "File".into();
     }
     input
 }

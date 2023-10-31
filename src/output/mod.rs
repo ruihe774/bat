@@ -64,6 +64,7 @@ impl OutputType {
         config: &Config,
         panel_width: usize,
     ) -> Result<Self> {
+        use compact_str::format_compact;
         use pager::{PagerKind, PagerSource};
         use std::process::{Command, Stdio};
 
@@ -129,7 +130,7 @@ impl OutputType {
 
                     if col_header > 0 {
                         p.arg("--header");
-                        p.arg(format!("0,{col_header}"));
+                        p.arg(format_compact!("0,{col_header}"));
                         p.arg("--no-search-headers");
                     }
                 }

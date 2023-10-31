@@ -3,6 +3,7 @@ use std::io;
 use std::io::Write;
 use std::num::NonZeroUsize;
 
+use compact_str::format_compact;
 use console::AnsiCodeIterator;
 use nu_ansi_term::{Color as TermColor, Style};
 use serde::{Deserialize, Serialize};
@@ -353,8 +354,8 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                      to show the binary file contents.",
                     warning_color.prefix(),
                     warning_color.suffix(),
-                    if &input.description.kind == "File" {
-                        format!(
+                    if input.description.kind == "File" {
+                        format_compact!(
                             "file '{}'",
                             input
                                 .description

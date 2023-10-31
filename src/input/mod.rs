@@ -12,6 +12,7 @@ use clircle::{Clircle, Identifier};
 #[cfg(feature = "zero-copy")]
 use memmap2::MmapOptions;
 
+use crate::config::ConfigString;
 use crate::error::{Context, Result};
 #[cfg(feature = "lessopen")]
 use lessopen::LessOpen;
@@ -54,12 +55,12 @@ impl StdError for IsDirectory {}
 #[derive(Debug, Clone)]
 pub struct InputDescription {
     pub name: Option<OsString>,
-    pub kind: String,
+    pub kind: ConfigString,
 }
 
 impl InputDescription {
     /// Creates a description for an input.
-    fn new(name: Option<OsString>, kind: String) -> Self {
+    fn new(name: Option<OsString>, kind: ConfigString) -> Self {
         InputDescription { name, kind }
     }
 }
@@ -74,10 +75,10 @@ impl InputKind {
     pub fn description(&self) -> InputDescription {
         match self {
             InputKind::OrdinaryFile(ref path) => {
-                InputDescription::new(Some(path.as_os_str().to_os_string()), "File".to_owned())
+                InputDescription::new(Some(path.as_os_str().to_os_string()), "File".into())
             }
-            InputKind::StdIn => InputDescription::new(None, "STDIN".to_owned()),
-            InputKind::CustomReader(_) => InputDescription::new(None, "READER".to_owned()),
+            InputKind::StdIn => InputDescription::new(None, "STDIN".into()),
+            InputKind::CustomReader(_) => InputDescription::new(None, "READER".into()),
         }
     }
 }
@@ -215,7 +216,7 @@ impl Input {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ContentType {
     /// "binary" data
-    Binary(Option<String>),
+    Binary(Option<ConfigString>),
 
     /// UTF-8 encoded "text" data
     UTF_8,
@@ -479,7 +480,7 @@ fn inspect(buffer: &[u8]) -> ContentType {
         _ => ContentType::Binary({
             let format = execuate_file(["--brief", "-"], buffer);
             (&format != b"data" && &format != b"very short file (no magic)")
-                .then(|| format.into_string_lossy())
+                .then(|| format.into_string_lossy().into())
         }),
     }
 }

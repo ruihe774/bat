@@ -1,7 +1,7 @@
 use std::borrow::Cow;
-use std::fmt::Write;
 
 use bstr::ByteSlice;
+use compact_str::format_compact;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,7 +49,6 @@ pub(crate) fn replace_nonprintable(
 ) -> String {
     let mut output = Vec::with_capacity(input.len());
     let mut line_idx = 0;
-    let mut buf = String::with_capacity(6);
     for chunk in input.utf8_chunks() {
         for chr in chunk.valid().chars() {
             let mut before_size = output.len();
@@ -110,9 +109,7 @@ pub(crate) fn replace_nonprintable(
             line_idx += output.len() - before_size;
         }
         for byte in chunk.invalid() {
-            write!(buf, "\\x{byte:02X}").unwrap();
-            output.extend(buf.chars());
-            buf.clear();
+            output.extend(format_compact!("\\x{byte:02X}").chars());
             line_idx += 6;
         }
     }

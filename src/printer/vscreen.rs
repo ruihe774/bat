@@ -1,14 +1,16 @@
 use std::fmt::{self, Display, Write};
 
+use crate::config::ConfigString;
+
 // Wrapper to avoid unnecessary branching when input doesn't have ANSI escape sequences.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AnsiStyle {
     attributes: Option<Attributes>,
 }
 
 impl AnsiStyle {
     pub fn new() -> Self {
-        AnsiStyle { attributes: None }
+        AnsiStyle::default()
     }
 
     pub fn update(&mut self, sequence: &str) -> bool {
@@ -31,54 +33,43 @@ impl Display for AnsiStyle {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct Attributes {
-    foreground: String,
-    background: String,
-    underlined: String,
+    foreground: ConfigString,
+    background: ConfigString,
+    underlined: ConfigString,
 
     /// The character set to use.
     /// REGEX: `\^[()][AB0-3]`
-    charset: String,
+    charset: ConfigString,
 
     /// A buffer for unknown sequences.
-    unknown_buffer: String,
+    unknown_buffer: ConfigString,
 
     /// ON:  ^[1m
     /// OFF: ^[22m
-    bold: String,
+    bold: ConfigString,
 
     /// ON:  ^[2m
     /// OFF: ^[22m
-    dim: String,
+    dim: ConfigString,
 
     /// ON:  ^[4m
     /// OFF: ^[24m
-    underline: String,
+    underline: ConfigString,
 
     /// ON:  ^[3m
     /// OFF: ^[23m
-    italic: String,
+    italic: ConfigString,
 
     /// ON:  ^[9m
     /// OFF: ^[29m
-    strike: String,
+    strike: ConfigString,
 }
 
 impl Attributes {
     pub fn new() -> Self {
-        Attributes {
-            foreground: String::new(),
-            background: String::new(),
-            underlined: String::new(),
-            charset: String::new(),
-            unknown_buffer: String::new(),
-            bold: String::new(),
-            dim: String::new(),
-            underline: String::new(),
-            italic: String::new(),
-            strike: String::new(),
-        }
+        Attributes::default()
     }
 
     /// Update the attributes with an escape sequence.
@@ -186,7 +177,11 @@ impl Attributes {
         true
     }
 
-    fn parse_color(out: &mut String, color: u16, parameters: &mut impl Iterator<Item = u16>) {
+    fn parse_color(
+        mut out: impl fmt::Write,
+        color: u16,
+        parameters: &mut impl Iterator<Item = u16>,
+    ) {
         match color % 10 {
             8 => match parameters.next() {
                 Some(5) /* 256-color */ => {

@@ -14,6 +14,7 @@ use bat::printer::{
     style::{StyleComponent, StyleComponents},
     NonprintableNotation, WrappingMode,
 };
+use compact_str::format_compact;
 
 use crate::clap_app;
 use crate::config::parse_config_file;
@@ -180,9 +181,9 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
         for suffix in values {
             syntax_mapping.ignore_suffix(
                 if !suffix.contains(|ch: char| !ch.is_ascii_alphanumeric()) {
-                    format!(".{}", suffix)
+                    format_compact!(".{}", suffix)
                 } else {
-                    suffix.to_owned()
+                    suffix.into()
                 },
             );
         }

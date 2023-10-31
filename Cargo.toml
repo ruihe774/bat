@@ -90,6 +90,7 @@ clircle = "0.4"
 console = "0.15"
 flate2 = "1.0"
 globset = "0.4"
+nu-ansi-term = "0.49"
 once_cell = "1.18"
 serde_bytes = "0.11"
 unicode-width = "0.1"
@@ -170,10 +171,6 @@ features = [
 version = "0.1"
 optional = true
 features = ["extended"]
-
-[dependencies.nu-ansi-term]
-git = "https://github.com/ruihe774/nu-ansi-term.git"
-branch = "no-dyn"
 
 [dependencies.syntect]
 git = "https://github.com/ruihe774/syntect.git"

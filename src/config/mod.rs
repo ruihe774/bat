@@ -13,15 +13,14 @@ use crate::output::pager::PagingMode;
 use crate::printer::preprocessor::NonprintableNotation;
 use crate::printer::style::{ConsolidatedStyleComponents, StyleComponents};
 use crate::printer::{TabWidth, WrappingMode};
-pub use leak_table::leak_string as leak_config_string;
 
-mod leak_table;
+pub use compact_str::CompactString as ConfigString;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// The explicitly configured language, if any
-    pub language: Option<String>,
+    pub language: Option<ConfigString>,
 
     /// The configured notation for non-printable characters
     pub nonprintable_notation: Option<NonprintableNotation>,
@@ -56,13 +55,13 @@ pub struct Config {
     pub visible_lines: VisibleLines,
 
     /// The syntax highlighting theme
-    pub theme: Option<String>,
+    pub theme: Option<ConfigString>,
 
     /// File extension/name mappings
     pub syntax_mapping: SyntaxMapping,
 
     /// Command to start the pager
-    pub pager: Option<String>,
+    pub pager: Option<ConfigString>,
 
     /// Whether or not to use ANSI italics
     pub use_italic_text: bool,
@@ -140,7 +139,7 @@ impl Config {
 
 #[derive(Debug, Clone)]
 pub struct ConsolidatedConfig {
-    pub language: Option<String>,
+    pub language: Option<ConfigString>,
     pub nonprintable_notation: Option<NonprintableNotation>,
     pub term_width: NonZeroUsize,
     pub tab_width: TabWidth,
@@ -152,9 +151,9 @@ pub struct ConsolidatedConfig {
     #[cfg(feature = "paging")]
     pub paging_mode: PagingMode,
     pub visible_lines: VisibleLines,
-    pub theme: Option<String>,
+    pub theme: Option<ConfigString>,
     pub syntax_mapping: ConsolidatedSyntaxMapping,
-    pub pager: Option<String>,
+    pub pager: Option<ConfigString>,
     pub use_italic_text: bool,
     pub highlighted_lines: HighlightedLineRanges,
     pub always_show_decorations: bool,

@@ -145,13 +145,13 @@ fn list_languages(
 
 fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> Result<ErrorHandling> {
     let assets = HighlightingAssets::new(cache_dir)?;
-    config.language = Some("Rust".to_owned());
+    config.language = Some("Rust".into());
     config.style_components = StyleComponents::plain().consolidate(false).unwrap();
 
     if config.colored_output && !config.loop_through {
         for theme in assets.themes() {
             println!("Theme: {}\n", Style::new().bold().paint(theme));
-            config.theme = Some(theme.to_owned());
+            config.theme = Some(theme.into());
             assert!(matches!(
                 Controller::new(&config, &assets).run(vec![Input::from_reader(
                     include_bytes!("../../../assets/theme_preview.rs").as_slice()

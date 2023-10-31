@@ -5,13 +5,13 @@ use globset::{Candidate, Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use os_str_bytes::RawOsString;
 use serde::{Deserialize, Serialize};
 
-use crate::config::leak_config_string;
+use crate::config::ConfigString;
 use crate::error::Result;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MappingTarget {
     /// For mapping a path to a specific syntax.
-    MapTo(&'static str),
+    MapTo(ConfigString),
 
     /// For mapping a path (typically an extension-less file name) to an unknown
     /// syntax. This typically means later using the contents of the first line
@@ -37,7 +37,7 @@ pub struct ConsolidatedSyntaxMapping {
 impl ConsolidatedSyntaxMapping {
     fn new(
         mapped_syntaxes: impl IntoIterator<Item = (Glob, MappingTarget)>,
-        ignored_suffixes: impl IntoIterator<Item = String>,
+        ignored_suffixes: impl IntoIterator<Item = impl AsRef<[u8]> + AsMut<[u8]>>,
     ) -> Result<Self> {
         let mut builder = GlobSetBuilder::new();
         Ok(ConsolidatedSyntaxMapping {
@@ -53,15 +53,14 @@ impl ConsolidatedSyntaxMapping {
                 .ascii_case_insensitive(true)
                 .match_kind(MatchKind::LeftmostLongest)
                 .start_kind(StartKind::Anchored)
-                .build(ignored_suffixes.into_iter().map(|s| {
-                    let mut v: Vec<u8> = s.into();
-                    v.reverse();
+                .build(ignored_suffixes.into_iter().map(|mut v| {
+                    v.as_mut().reverse();
                     v
                 }))?,
         })
     }
 
-    pub(crate) fn get_syntax_for(&self, path: impl AsRef<Path>) -> Option<MappingTarget> {
+    pub(crate) fn get_syntax_for(&self, path: impl AsRef<Path>) -> Option<&MappingTarget> {
         let candidate_path = Candidate::new(path.as_ref());
         let candidate_filename = Path::new(path.as_ref()).file_name().map(Candidate::new);
         let path_matches = self.globset.matches_candidate(&candidate_path);
@@ -73,7 +72,7 @@ impl ConsolidatedSyntaxMapping {
             .into_iter()
             .chain(name_matches)
             .max()
-            .map(|i| self.targets[i])
+            .map(|i| &self.targets[i])
     }
 
     pub(crate) fn strip_ignored_suffixes(&self, file_name: OsString) -> OsString {
@@ -94,26 +93,42 @@ impl ConsolidatedSyntaxMapping {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyntaxMapping {
     use_builtins: bool,
-    #[serde(deserialize_with = "deserialize_leaky_mapped_syntaxes")]
-    mapped_syntaxes: Vec<(String, MappingTarget)>,
-    ignored_suffixes: Vec<String>,
+    mapped_syntaxes: Vec<(ConfigString, MappingTarget)>,
+    ignored_suffixes: Vec<ConfigString>,
 }
 
 impl SyntaxMapping {
     pub fn consolidate(self) -> Result<ConsolidatedSyntaxMapping> {
-        use MappingTarget::*;
         ConsolidatedSyntaxMapping::new(
             {
-                let iter = if self.use_builtins {
-                    include!("../../assets/syntax_mapping.ron").as_slice()
-                } else {
-                    &[]
+                let iter = {
+                    use self::MappingTarget as RealMappingTarget;
+                    enum MappingTarget {
+                        MapTo(&'static str),
+                        MapToUnknown,
+                        MapExtensionToUnknown,
+                    }
+                    use MappingTarget::*;
+                    if self.use_builtins {
+                        include!("../../assets/syntax_mapping.ron").as_slice()
+                    } else {
+                        &[]
+                    }
+                    .iter()
+                    .map(|(s, t)| {
+                        (
+                            (*s).into(),
+                            match t {
+                                MapTo(s) => RealMappingTarget::MapTo((*s).into()),
+                                MapToUnknown => RealMappingTarget::MapToUnknown,
+                                MapExtensionToUnknown => RealMappingTarget::MapExtensionToUnknown,
+                            },
+                        )
+                    })
                 }
-                .iter()
-                .copied()
-                .chain(self.mapped_syntaxes.iter().map(|(s, t)| (s.as_str(), *t)))
+                .chain(self.mapped_syntaxes)
                 .map(|(s, t)| {
-                    GlobBuilder::new(s)
+                    GlobBuilder::new(s.as_str())
                         .case_insensitive(true)
                         .literal_separator(true)
                         .build()
@@ -132,16 +147,17 @@ impl SyntaxMapping {
             }
             .iter()
             .copied()
-            .map(ToOwned::to_owned)
-            .chain(self.ignored_suffixes),
+            .map(ConfigString::from)
+            .chain(self.ignored_suffixes)
+            .map(ConfigString::into_bytes),
         )
     }
 
-    pub fn map_syntax(&mut self, glob: impl Into<String>, target: MappingTarget) {
+    pub fn map_syntax(&mut self, glob: impl Into<ConfigString>, target: MappingTarget) {
         self.mapped_syntaxes.push((glob.into(), target));
     }
 
-    pub fn ignore_suffix(&mut self, suffix: impl Into<String>) {
+    pub fn ignore_suffix(&mut self, suffix: impl Into<ConfigString>) {
         self.ignored_suffixes.push(suffix.into());
     }
 
@@ -158,34 +174,4 @@ impl Default for SyntaxMapping {
             ignored_suffixes: Vec::new(),
         }
     }
-}
-
-fn deserialize_leaky_mapped_syntaxes<'de, D>(
-    deserializer: D,
-) -> std::result::Result<Vec<(String, MappingTarget)>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use self::MappingTarget as RealMappingTarget;
-    #[derive(Deserialize)]
-    enum MappingTarget {
-        MapTo(String),
-        MapToUnknown,
-        MapExtensionToUnknown,
-    }
-    let v = Vec::<(String, MappingTarget)>::deserialize(deserializer)?;
-    Ok(v.into_iter()
-        .map(|(s, t)| {
-            (
-                s,
-                match t {
-                    MappingTarget::MapTo(s) => RealMappingTarget::MapTo(leak_config_string(s)),
-                    MappingTarget::MapToUnknown => RealMappingTarget::MapToUnknown,
-                    MappingTarget::MapExtensionToUnknown => {
-                        RealMappingTarget::MapExtensionToUnknown
-                    }
-                },
-            )
-        })
-        .collect())
 }

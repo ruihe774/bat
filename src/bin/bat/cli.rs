@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use clap::ArgMatches;
 
 use bat::assets::syntax_mapping::MappingTarget;
-use bat::config::{leak_config_string, Config};
+use bat::config::{Config, ConfigString};
 use bat::controller::line_range::{HighlightedLineRanges, LineRange, LineRanges, VisibleLines};
 use bat::error::*;
 use bat::input::Input;
@@ -73,11 +73,15 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
         parse_config_file(config_path)?
     };
 
-    if let language @ Some(_) = matches.get_one::<String>("language").cloned().or_else(|| {
-        (matches.get_flag("show-all")
-            || matches.get_one::<String>("nonprintable-notation").is_some())
-        .then(|| "show-nonprintable".to_owned())
-    }) {
+    if let language @ Some(_) = matches
+        .get_one::<String>("language")
+        .map(ConfigString::from)
+        .or_else(|| {
+            (matches.get_flag("show-all")
+                || matches.get_one::<String>("nonprintable-notation").is_some())
+            .then_some("show-nonprintable".into())
+        })
+    {
         config.language = language
     }
 
@@ -140,7 +144,7 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
 
     if let theme @ Some(_) = matches
         .get_one::<String>("theme")
-        .and_then(|s| (s != "default").then(|| s.to_owned()))
+        .and_then(|s| (s != "default").then_some(s.into()))
     {
         config.theme = theme;
     }
@@ -188,12 +192,12 @@ pub fn get_config(matches: &ArgMatches, config_path: &Path) -> Result<Config> {
             let mut parts = from_to.split(':');
             syntax_mapping.map_syntax(
                 parts.next().unwrap(),
-                MappingTarget::MapTo(leak_config_string(parts.next().unwrap().to_owned())),
+                MappingTarget::MapTo(parts.next().unwrap().into()),
             );
         }
     }
 
-    if let pager @ Some(_) = matches.get_one::<String>("pager").map(|s| s.to_owned()) {
+    if let pager @ Some(_) = matches.get_one::<String>("pager").map(ConfigString::from) {
         config.pager = pager;
     }
 

@@ -98,6 +98,10 @@ unicode-width = "0.1"
 version = "6.6"
 features = ["conversions"]
 
+[dependencies.compact_str]
+version = "0.7"
+features = ["smallvec", "serde"]
+
 [dependencies.serde]
 version = "1.0"
 features = ["derive"]

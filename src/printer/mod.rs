@@ -559,7 +559,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                 .config
                 .theme
                 .as_ref()
-                .is_some_and(|name| name == "ansi")
+                .is_some_and(|name| name == &"ansi")
         {
             self.ansi_style.update("^[4m");
         }
@@ -721,7 +721,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                 .config
                 .theme
                 .as_ref()
-                .is_some_and(|name| name == "ansi")
+                .is_some_and(|name| name == &"ansi")
         {
             self.ansi_style.update("^[24m");
             write!(handle, "\x1B[24m")?;

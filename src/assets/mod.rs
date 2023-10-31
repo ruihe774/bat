@@ -242,7 +242,7 @@ impl HighlightingAssets {
                 })
                 .ok_or_else(|| {
                     UnknownSyntax {
-                        name: syntax_name.to_owned(),
+                        name: syntax_name.clone().into(),
                     }
                     .into()
                 }),
@@ -663,8 +663,8 @@ mod tests {
     fn syntax_detection_same_for_inputkinds() {
         let test = SyntaxDetectionTest::new(Some({
             let mut mapping = SyntaxMapping::default();
-            mapping.map_syntax("*.myext", MappingTarget::MapTo("C"));
-            mapping.map_syntax("MY_FILE", MappingTarget::MapTo("Markdown"));
+            mapping.map_syntax("*.myext", MappingTarget::MapTo("C".into()));
+            mapping.map_syntax("MY_FILE", MappingTarget::MapTo("Markdown".into()));
             mapping.consolidate().unwrap()
         }));
 
@@ -716,7 +716,7 @@ mod tests {
         assert_eq!(
             SyntaxDetectionTest::new(Some({
                 let mut mapping = SyntaxMapping::default();
-                mapping.map_syntax("*.h", MappingTarget::MapTo("C"));
+                mapping.map_syntax("*.h", MappingTarget::MapTo("C".into()));
                 mapping.consolidate().unwrap()
             }))
             .syntax_for_file("test.h"),
@@ -775,7 +775,7 @@ mod tests {
         // // Adding a mapping for "MD" in addition to "md" should not break the mapping
         let test = SyntaxDetectionTest::new(Some({
             let mut mapping = SyntaxMapping::default();
-            mapping.map_syntax("*.MD", MappingTarget::MapTo("Markdown"));
+            mapping.map_syntax("*.MD", MappingTarget::MapTo("Markdown".into()));
             mapping.consolidate().unwrap()
         }));
 

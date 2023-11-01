@@ -173,7 +173,10 @@ macro_rules! test {
     ($name: ident: $style: expr; $input: expr => $result: expr) => {
         #[test]
         fn $name() {
-            assert_eq!(format_compact!("{}{}{}", $style.prefix(), $input, $style.suffix()), $result);
+            assert_eq!(
+                format_compact!("{}{}{}", $style.prefix(), $input, $style.suffix()),
+                $result
+            );
         }
     };
 }

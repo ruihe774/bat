@@ -2,9 +2,10 @@
 use zwrite::{write, writeln};
 
 use std::io::{self, IsTerminal, Write};
+use std::mem;
 
 use clircle::{Clircle, Identifier};
-use nu_ansi_term::Color;
+use nu_ansi_term::{Color, Style};
 
 use crate::assets::HighlightingAssets;
 use crate::config::ConsolidatedConfig as Config;
@@ -41,8 +42,9 @@ pub fn default_error_handler(
         .unwrap_or_default();
     writeln!(
         output,
-        "{}[bat error]{}: {:?}",
+        "{}{}{}: {:?}",
         style.prefix(),
+        "[bat error]",
         style.suffix(),
         error
     )

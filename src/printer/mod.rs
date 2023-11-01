@@ -395,15 +395,19 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             if let Some(name) = description.name.as_ref() {
                 write!(
                     handle,
-                    "{}: {}",
+                    "{}: {}{}{}",
                     description.kind.as_str(),
-                    self.colors.header_value.paint(name.to_string_lossy()),
+                    self.colors.header_value.prefix(),
+                    name.to_string_lossy(),
+                    self.colors.header_value.suffix()
                 )?;
             } else {
                 write!(
                     handle,
-                    "{}",
-                    self.colors.header_value.paint(description.kind.as_str()),
+                    "{}{}{}",
+                    self.colors.header_value.prefix(),
+                    description.kind.as_str(),
+                    self.colors.header_value.suffix()
                 )?;
             }
             write!(

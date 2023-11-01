@@ -43,13 +43,16 @@ impl StdError for ConflictStyle {}
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StyleComponent {
     Auto,
+    AutoFull,
     Grid,
     Rule,
     Header,
     HeaderFilename,
+    HeaderFilesize,
     LineNumbers,
     Snip,
     Full,
+    Default,
     Plain,
 }
 
@@ -85,6 +88,13 @@ impl StyleComponent {
         match self {
             StyleComponent::Auto => {
                 if interactive {
+                    StyleComponent::Default.components(interactive)
+                } else {
+                    StyleComponent::Plain.components(interactive)
+                }
+            }
+            StyleComponent::AutoFull => {
+                if interactive {
                     StyleComponent::Full.components(interactive)
                 } else {
                     StyleComponent::Plain.components(interactive)
@@ -92,12 +102,23 @@ impl StyleComponent {
             }
             StyleComponent::Grid => &[StyleComponent::Grid],
             StyleComponent::Rule => &[StyleComponent::Rule],
-            StyleComponent::Header | StyleComponent::HeaderFilename => {
-                &[StyleComponent::HeaderFilename]
-            }
+            StyleComponent::Header => &[
+                StyleComponent::HeaderFilename,
+                StyleComponent::HeaderFilesize,
+            ],
+            StyleComponent::HeaderFilename => &[StyleComponent::HeaderFilename],
+            StyleComponent::HeaderFilesize => &[StyleComponent::HeaderFilesize],
             StyleComponent::LineNumbers => &[StyleComponent::LineNumbers],
             StyleComponent::Snip => &[StyleComponent::Snip],
             StyleComponent::Full => &[
+                StyleComponent::Grid,
+                StyleComponent::HeaderFilename,
+                StyleComponent::HeaderFilesize,
+                StyleComponent::LineNumbers,
+                StyleComponent::Snip,
+            ],
+
+            StyleComponent::Default => &[
                 StyleComponent::Grid,
                 StyleComponent::HeaderFilename,
                 StyleComponent::LineNumbers,
@@ -118,6 +139,7 @@ impl FromStr for StyleComponent {
             "rule" => Ok(StyleComponent::Rule),
             "header" => Ok(StyleComponent::Header),
             "header-filename" => Ok(StyleComponent::HeaderFilename),
+            "header-filesize" => Ok(StyleComponent::HeaderFilesize),
             "numbers" => Ok(StyleComponent::LineNumbers),
             "snip" => Ok(StyleComponent::Snip),
             // for backward compatibility, default is to full
@@ -182,11 +204,15 @@ impl ConsolidatedStyleComponents {
     }
 
     pub fn header(&self) -> bool {
-        self.header_filename()
+        self.header_filename() || self.header_filesize()
     }
 
     pub fn header_filename(&self) -> bool {
         self.0.contains(&StyleComponent::HeaderFilename.into())
+    }
+
+    pub fn header_filesize(&self) -> bool {
+        self.0.contains(&StyleComponent::HeaderFilesize.into())
     }
 
     pub fn numbers(&self) -> bool {
@@ -199,5 +225,9 @@ impl ConsolidatedStyleComponents {
 
     pub fn plain(&self) -> bool {
         self.0.is_empty()
+    }
+
+    pub fn components(&self) -> impl Iterator<Item = StyleComponent> + '_ {
+        self.0.iter().copied().map(Into::into)
     }
 }

@@ -23,6 +23,7 @@ use crate::error::Result;
 use crate::input::{decode, ContentType, OpenedInput};
 pub use preprocessor::NonprintableNotation;
 use preprocessor::{expand_tabs, replace_nonprintable};
+use style::StyleComponent;
 use terminal::{to_ansi_color, to_ansi_style};
 use vscreen::AnsiStyle;
 
@@ -378,8 +379,6 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             return Ok(());
         }
 
-        let description = &input.description;
-
         // Print the cornering grid before the first header component
         if self.config.style_components.grid() {
             self.print_horizontal_line(handle, '┬')?;
@@ -390,45 +389,63 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             }
         }
 
-        self.print_header_component_indent(handle)?;
-        if self.config.style_components.header_filename() {
-            if let Some(name) = description.name.as_ref() {
-                write!(
-                    handle,
-                    "{:s}: {:s}{:s}{:s}",
-                    description.kind.as_str(),
-                    self.colors.header_value.prefix(),
-                    name.to_string_lossy(),
-                    self.colors.header_value.suffix()
-                )?;
-            } else {
-                write!(
-                    handle,
-                    "{:s}{:s}{:s}",
-                    self.colors.header_value.prefix(),
-                    description.kind.as_str(),
-                    self.colors.header_value.suffix()
-                )?;
+        for component in self.config.style_components.components() {
+            match component {
+                StyleComponent::HeaderFilename => {
+                    self.print_header_component_indent(handle)?;
+                    let description = &input.description;
+                    if let Some(name) = description.name.as_ref() {
+                        write!(
+                            handle,
+                            "{:s}: {:s}{:s}{:s}",
+                            description.kind.as_str(),
+                            self.colors.header_value.prefix(),
+                            name.to_string_lossy(),
+                            self.colors.header_value.suffix()
+                        )?;
+                    } else {
+                        write!(
+                            handle,
+                            "{:s}{:s}{:s}",
+                            self.colors.header_value.prefix(),
+                            description.kind.as_str(),
+                            self.colors.header_value.suffix()
+                        )?;
+                    }
+                    write!(
+                        handle,
+                        "{:s}",
+                        match self.content_type {
+                            Some(ContentType::Binary(_)) => "   <BINARY>",
+                            Some(ContentType::UTF_16LE) => "   <UTF-16LE>",
+                            Some(ContentType::UTF_16BE) => "   <UTF-16BE>",
+                            Some(ContentType::UTF_32LE) => "   <UTF-32LE>",
+                            Some(ContentType::UTF_32BE) => "   <UTF-32BE>",
+                            Some(ContentType::UTF_8) => "",
+                            None => "   <EMPTY>",
+                        },
+                    )?;
+                    if let Some(ContentType::Binary(Some(ref binary_type))) = self.content_type {
+                        writeln!(handle, " {binary_type}")?;
+                    } else {
+                        writeln!(handle)?;
+                    }
+                }
+                StyleComponent::HeaderFilesize => {
+                    if let Some(length) = input.length {
+                        self.print_header_component_indent(handle)?;
+                        writeln!(
+                            handle,
+                            "Size: {:s}{:s}{:s}",
+                            self.colors.header_value.prefix(),
+                            bytesize::to_string(length, true),
+                            self.colors.header_value.suffix()
+                        )?;
+                    }
+                }
+                _ => (),
             }
-            write!(
-                handle,
-                "{:s}",
-                match self.content_type {
-                    Some(ContentType::Binary(_)) => "   <BINARY>",
-                    Some(ContentType::UTF_16LE) => "   <UTF-16LE>",
-                    Some(ContentType::UTF_16BE) => "   <UTF-16BE>",
-                    Some(ContentType::UTF_32LE) => "   <UTF-32LE>",
-                    Some(ContentType::UTF_32BE) => "   <UTF-32BE>",
-                    Some(ContentType::UTF_8) => "",
-                    None => "   <EMPTY>",
-                },
-            )?;
-            if let Some(ContentType::Binary(Some(ref binary_type))) = self.content_type {
-                writeln!(handle, " {binary_type}")?;
-            } else {
-                writeln!(handle)?;
-            }
-        };
+        }
 
         if self.config.style_components.grid() {
             if self

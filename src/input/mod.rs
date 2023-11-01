@@ -95,6 +95,7 @@ pub struct Input {
 pub(crate) struct OpenedInput {
     pub(crate) reader: InputReader,
     pub(crate) description: InputDescription,
+    pub(crate) length: Option<u64>,
     #[cfg(feature = "lessopen")]
     lessopen: Option<LessOpen>,
 }
@@ -157,57 +158,61 @@ impl Input {
                 Ok(OpenedInput {
                     description,
                     reader: InputReader::new(io::stdin().lock()),
+                    length: None,
                     #[cfg(feature = "lessopen")]
                     lessopen,
                 })
             }
 
-            InputKind::OrdinaryFile(path) => Ok(OpenedInput {
-                description,
-                reader: {
-                    let mut file = File::open(&path)
-                        .with_context(|| format!("failed to open '{}'", path.display()))?;
-                    let metadata = file.metadata().with_context(|| {
-                        format!("failed to get metadata of '{}'", path.display())
-                    })?;
-                    if metadata.is_dir() {
-                        return Err(IsDirectory { path }.into());
-                    }
+            InputKind::OrdinaryFile(path) => {
+                let mut file = File::open(&path)
+                    .with_context(|| format!("failed to open '{}'", path.display()))?;
+                let metadata = file
+                    .metadata()
+                    .with_context(|| format!("failed to get metadata of '{}'", path.display()))?;
+                if metadata.is_dir() {
+                    return Err(IsDirectory { path }.into());
+                }
+                let length = metadata.len();
 
-                    if let Some(stdout) = stdout_identifier {
-                        let input_identifier = Identifier::try_from(file)?;
-                        if stdout.surely_conflicts_with(&input_identifier) {
-                            return Err(IoCircle { path }.into());
+                if let Some(stdout) = stdout_identifier {
+                    let input_identifier = Identifier::try_from(file)?;
+                    if stdout.surely_conflicts_with(&input_identifier) {
+                        return Err(IoCircle { path }.into());
+                    }
+                    file = input_identifier.into_inner().unwrap();
+                }
+
+                #[cfg(feature = "zero-copy")]
+                let reader = metadata
+                    .is_file()
+                    .then_some(length)
+                    .and_then(|len| {
+                        unsafe {
+                            MmapOptions::new()
+                                .len(isize::try_from(len).ok()?.try_into().unwrap())
+                                .map_copy(&file)
                         }
-                        file = input_identifier.into_inner().unwrap();
-                    }
-
-                    #[cfg(feature = "zero-copy")]
-                    let r = metadata
-                        .is_file()
-                        .then_some(metadata.len())
-                        .and_then(|len| {
-                            unsafe {
-                                MmapOptions::new()
-                                    .len(isize::try_from(len).ok()?.try_into().unwrap())
-                                    .map_copy(&file)
-                            }
-                            .ok()
-                        })
-                        .map_or_else(
-                            || InputReader::new(BufReader::new(file)),
-                            |mmap| InputReader::new(LeakySliceReader::new(leak_mmap(mmap))),
-                        );
-                    #[cfg(not(feature = "zero-copy"))]
-                    let r = InputReader::new(BufReader::new(file));
-                    r
-                },
-                #[cfg(feature = "lessopen")]
-                lessopen,
-            }),
+                        .ok()
+                    })
+                    .map_or_else(
+                        || InputReader::new(BufReader::new(file)),
+                        |mmap| InputReader::new(LeakySliceReader::new(leak_mmap(mmap))),
+                    );
+                #[cfg(not(feature = "zero-copy"))]
+                let reader = InputReader::new(BufReader::new(file));
+                Ok(OpenedInput {
+                    description,
+                    reader,
+                    length: Some(length),
+                    #[cfg(feature = "lessopen")]
+                    lessopen,
+                })
+            }
             InputKind::CustomReader(reader) => Ok(OpenedInput {
                 description,
                 reader: InputReader::new(BufReader::new(reader)),
+                length: None,
                 #[cfg(feature = "lessopen")]
                 lessopen,
             }),

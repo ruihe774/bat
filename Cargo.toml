@@ -192,7 +192,7 @@ default-features = false
 
 [patch.crates-io.fancy-regex]
 git = "https://github.com/ruihe774/fancy-regex.git"
-branch = "relative-backref"
+branch = "msk"
 
 [target.'cfg(not(unix))'.dependencies]
 content_inspector = "0.2"

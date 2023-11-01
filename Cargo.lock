@@ -39,6 +39,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
+name = "arrayvec"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
+
+[[package]]
 name = "assert_cmd"
 version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -385,10 +391,12 @@ dependencies = [
 [[package]]
 name = "fancy-regex"
 version = "0.11.0"
-source = "git+https://github.com/ruihe774/fancy-regex.git?branch=relative-backref#3f4bac23194fbf543bce601a35796e8d6f75975d"
+source = "git+https://github.com/ruihe774/fancy-regex.git?branch=msk#e8dcdba6f06a4f613e9c063f7529025941021f40"
 dependencies = [
+ "arrayvec",
  "bit-set",
  "regex",
+ "smallvec",
 ]
 
 [[package]]

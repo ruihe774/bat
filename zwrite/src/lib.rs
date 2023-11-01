@@ -173,6 +173,7 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
                 fn __run(&mut self, #fn_args) -> std::fmt::Result;
             }
             impl<W: std::fmt::Write + ?std::marker::Sized> __Helper1 for W {
+                #[inline(always)]
                 fn __run(&mut self, #fn_args) -> std::fmt::Result {
                     #body
                     Ok(())
@@ -182,9 +183,11 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
                 fn __run(&mut self, #fn_args) -> std::io::Result<()>;
             }
             impl<W: std::io::Write + ?std::marker::Sized> __Helper2 for W {
+                #[inline(always)]
                 fn __run(&mut self, #fn_args) -> std::io::Result<()> {
                     struct __FmtWriter<'a, W: std::io::Write + ?std::marker::Sized>(&'a mut W, std::option::Option<std::io::Error>);
                     impl<'a, W: std::io::Write + ?std::marker::Sized> std::fmt::Write for __FmtWriter<'a, W> {
+                        #[inline(always)]
                         fn write_str(&mut self, s: &str) -> std::fmt::Result {
                             if let Err(e) = self.0.write_all(s.as_bytes()) {
                                 self.1 = Some(e);

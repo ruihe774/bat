@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use zwrite::{write, writeln};
 
-use std::fmt::{self, Display};
+use compact_str::ToCompactString;
 
 use crate::config::ConfigString;
 
@@ -27,12 +27,12 @@ impl AnsiStyle {
     }
 }
 
-impl Display for AnsiStyle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.attributes {
-            Some(ref a) => a.fmt(f),
-            None => Ok(()),
-        }
+impl ToCompactString for AnsiStyle {
+    fn to_compact_string(&self) -> ConfigString {
+        self.attributes
+            .as_ref()
+            .map(|attr| attr.to_compact_string())
+            .unwrap_or_default()
     }
 }
 
@@ -176,15 +176,11 @@ impl Attributes {
 
     fn update_with_charset(&mut self, kind: char, set: &str) -> bool {
         self.charset.clear();
-        write!(self.charset, "\x1B{}{}", kind, &set[..set.len().min(1)]).unwrap();
+        write!(self.charset, "\x1B{}{:s}", kind, &set[..set.len().min(1)]).unwrap();
         true
     }
 
-    fn parse_color(
-        mut out: impl fmt::Write,
-        color: u16,
-        parameters: &mut impl Iterator<Item = u16>,
-    ) {
+    fn parse_color(out: &mut ConfigString, color: u16, parameters: &mut impl Iterator<Item = u16>) {
         match color % 10 {
             8 => match parameters.next() {
                 Some(5) /* 256-color */ => {
@@ -210,11 +206,12 @@ impl Attributes {
     }
 }
 
-impl Display for Attributes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl ToCompactString for Attributes {
+    fn to_compact_string(&self) -> ConfigString {
+        let mut f = ConfigString::default();
         write!(
             f,
-            "{}{}{}{}{}{}{}{}{}",
+            "{:s}{:s}{:s}{:s}{:s}{:s}{:s}{:s}{:s}",
             self.foreground,
             self.background,
             self.underlined,
@@ -225,5 +222,7 @@ impl Display for Attributes {
             self.italic,
             self.strike,
         )
+        .unwrap();
+        f
     }
 }

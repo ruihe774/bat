@@ -41,7 +41,7 @@ pub fn default_error_handler(
         .unwrap_or_default();
     writeln!(
         output,
-        "{}[bat error]{}: {:?}",
+        "{:s}[bat error]{:s}: {:?}",
         style.prefix(),
         style.suffix(),
         error

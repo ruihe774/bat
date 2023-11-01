@@ -124,7 +124,11 @@ pub(crate) fn asset_to_contents<T: serde::Serialize>(
 }
 
 fn asset_to_cache<T: serde::Serialize>(asset: &T, path: &Path, description: &str) -> Result<()> {
-    print!("Writing {} to {} ... ", description, path.to_string_lossy());
+    print!(
+        "Writing {:s} to {:s} ... ",
+        description,
+        path.to_string_lossy()
+    );
     let contents = asset_to_contents(asset, description, true)?;
     std::fs::write(path, &contents[..]).map_err(|_| {
         format!(
@@ -258,7 +262,12 @@ mod acknowledgements {
         relative_path: &str,
         license_text: &str,
     ) {
-        write!(acknowledgements, "## {}\n\n{}", relative_path, license_text).ok();
+        write!(
+            acknowledgements,
+            "## {:s}\n\n{:s}",
+            relative_path, license_text
+        )
+        .ok();
 
         // Make sure the last char is a newline to not mess up formatting later
         if acknowledgements

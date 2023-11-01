@@ -82,7 +82,7 @@ impl Style {
     /// Write any bytes that go *after* a piece of text to the given writer.
     fn write_suffix(&self, f: &mut CompactString) {
         if !self.is_plain() {
-            write!(f, "{}", RESET).unwrap()
+            write!(f, "{:s}", RESET).unwrap()
         }
     }
 }

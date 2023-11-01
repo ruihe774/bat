@@ -13,7 +13,7 @@ use syn::{
 };
 
 enum FmtArg {
-    String(String),
+    String(Expr),
     Display(Expr),
     Format(String, Option<Expr>),
 }
@@ -65,7 +65,8 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
             if iter.next_if_eq(&'{').is_none() {
                 if !in_brace {
                     if !current_string.is_empty() {
-                        fmt_args.push(FmtArg::String(mem::take(&mut current_string)));
+                        let s = mem::take(&mut current_string);
+                        fmt_args.push(FmtArg::String(parse_quote! { #s }));
                     }
                     in_brace = true;
                     continue;
@@ -83,6 +84,11 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
                 } else if let Ok(ident) = parse_str::<Ident>(&pat) {
                     let e: Expr = parse_quote_spanned! { sspan => #ident };
                     fmt_args.push(FmtArg::Display(e));
+                } else if pat == ":s" {
+                    fmt_args.push(FmtArg::String(match args.next() {
+                        Some(e) => e,
+                        None => return mismatch_args,
+                    }))
                 } else if pat.starts_with(':') {
                     fmt_args.push(FmtArg::Format(
                         pat,
@@ -103,7 +109,8 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
         current_string.push(c);
     }
     if !current_string.is_empty() {
-        fmt_args.push(FmtArg::String(current_string));
+        let s = mem::take(&mut current_string);
+        fmt_args.push(FmtArg::String(parse_quote! { #s }));
     }
     if args.next().is_some() {
         return mismatch_args;
@@ -139,7 +146,7 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
     let call: TokenStream = fmt_args
         .into_iter()
         .map(|fmt_arg| match fmt_arg {
-            FmtArg::String(s) => quote! { #s, },
+            FmtArg::String(s) => quote! { &(#s), },
             FmtArg::Display(e) => quote! { (#e).to_compact_string().as_str(), },
             FmtArg::Format(mut f, e) => {
                 f = format!("{{{f}}}");

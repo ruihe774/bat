@@ -226,11 +226,11 @@ impl<'a> InteractivePrinter<'a> {
     }
 
     fn print_horizontal_line_term<W: Write>(&self, handle: &mut W, style: Style) -> io::Result<()> {
-        write!(handle, "{}", style.prefix())?;
+        write!(handle, "{:s}", style.prefix())?;
         for _ in 0..usize::from(self.config.term_width) {
             write!(handle, "─")?;
         }
-        writeln!(handle, "{}", style.suffix())?;
+        writeln!(handle, "{:s}", style.suffix())?;
         Ok(())
     }
 
@@ -238,7 +238,7 @@ impl<'a> InteractivePrinter<'a> {
         if self.panel_width == 0 {
             self.print_horizontal_line_term(handle, self.colors.grid)?;
         } else {
-            write!(handle, "{}", self.colors.grid.prefix())?;
+            write!(handle, "{:s}", self.colors.grid.prefix())?;
             for _ in 0..self.panel_width {
                 write!(handle, "─")?;
             }
@@ -246,7 +246,7 @@ impl<'a> InteractivePrinter<'a> {
             for _ in 0..(usize::from(self.config.term_width) - (self.panel_width + 1)) {
                 write!(handle, "─")?;
             }
-            writeln!(handle, "{}", self.colors.grid.suffix())?;
+            writeln!(handle, "{:s}", self.colors.grid.suffix())?;
         }
 
         Ok(())
@@ -259,7 +259,7 @@ impl<'a> InteractivePrinter<'a> {
         if self.config.style_components.grid() && self.panel_width != 0 {
             write!(
                 handle,
-                "{}│ {}",
+                "{:s}│ {:s}",
                 self.colors.grid.prefix(),
                 self.colors.grid.suffix(),
             )?;
@@ -277,7 +277,7 @@ impl<'a> InteractivePrinter<'a> {
             self.line_number_width += 1;
             self.line_number_width_invalid_at *= 10;
         }
-        write!(handle, "{}", self.colors.line_number.prefix())?;
+        write!(handle, "{:s}", self.colors.line_number.prefix())?;
         if continuation {
             for _ in 0..self.line_number_width {
                 write!(handle, " ")?;
@@ -285,14 +285,14 @@ impl<'a> InteractivePrinter<'a> {
         } else {
             write!(handle, "{line_number:4}")?;
         }
-        write!(handle, "{}", self.colors.line_number.suffix())?;
+        write!(handle, "{:s}", self.colors.line_number.suffix())?;
         Ok(self.line_number_width)
     }
 
     fn print_grid<W: Write>(&mut self, handle: &mut W) -> io::Result<usize> {
         write!(
             handle,
-            "{}│{}",
+            "{:s}│{:s}",
             self.colors.grid.prefix(),
             self.colors.grid.suffix()
         )?;
@@ -352,7 +352,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                 let warning_color = TermColor::Yellow;
                 writeln!(
                     handle,
-                    "{}[bat warning]{}: Binary content from {} will not be printed to the terminal \
+                    "{:s}[bat warning]{:s}: Binary content from {:s} will not be printed to the terminal \
                      (but will be present if the output of 'bat' is piped). You can use 'bat -A' \
                      to show the binary file contents.",
                     warning_color.prefix(),
@@ -395,7 +395,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             if let Some(name) = description.name.as_ref() {
                 write!(
                     handle,
-                    "{}: {}{}{}",
+                    "{:s}: {:s}{:s}{:s}",
                     description.kind.as_str(),
                     self.colors.header_value.prefix(),
                     name.to_string_lossy(),
@@ -404,7 +404,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             } else {
                 write!(
                     handle,
-                    "{}{}{}",
+                    "{:s}{:s}{:s}",
                     self.colors.header_value.prefix(),
                     description.kind.as_str(),
                     self.colors.header_value.suffix()
@@ -412,7 +412,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             }
             write!(
                 handle,
-                "{}",
+                "{:s}",
                 match self.content_type {
                     Some(ContentType::Binary(_)) => "   <BINARY>",
                     Some(ContentType::UTF_16LE) => "   <UTF-16LE>",
@@ -461,7 +461,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
     }
 
     fn print_snip(&mut self, handle: &mut W) -> Result<()> {
-        write!(handle, "{}", self.colors.grid.prefix())?;
+        write!(handle, "{:s}", self.colors.grid.prefix())?;
 
         let panel_text = " ...";
         let panel_count = if self.panel_width == 0 {
@@ -499,7 +499,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
             write!(handle, " ─")?;
         }
 
-        writeln!(handle, "{}", self.colors.grid.suffix())?;
+        writeln!(handle, "{:s}", self.colors.grid.suffix())?;
 
         Ok(())
     }
@@ -610,7 +610,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                                 );
                                 write!(
                                     handle,
-                                    "{}{}{}{}",
+                                    "{:s}{}{:s}{:s}",
                                     style.prefix(),
                                     &self.ansi_style,
                                     text_trimmed,
@@ -628,14 +628,14 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                                     if let Some(width) =
                                         cursor_max.checked_sub(cursor_total).map(|width| width + 1)
                                     {
-                                        write!(handle, "{}", ansi_style.prefix())?;
+                                        write!(handle, "{:s}", ansi_style.prefix())?;
                                         for _ in 0..width {
                                             write!(handle, " ")?;
                                         }
-                                        write!(handle, "{}", ansi_style.suffix())?;
+                                        write!(handle, "{:s}", ansi_style.suffix())?;
                                     }
                                 }
-                                write!(handle, "{}", &text[text_trimmed.len()..])?;
+                                write!(handle, "{:s}", &text[text_trimmed.len()..])?;
                             }
                         }
                     }
@@ -673,7 +673,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                                 italics,
                                 background_color,
                             );
-                            write!(handle, "{}{}", style.prefix(), &self.ansi_style)?;
+                            write!(handle, "{:s}{}", style.prefix(), &self.ansi_style)?;
 
                             for c in text.chars() {
                                 // calculate the displayed width for next character
@@ -684,11 +684,11 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
                                 // flush the buffer.
                                 if current_width > max_width {
                                     // It wraps.
-                                    writeln!(handle, "{}", style.suffix())?;
+                                    writeln!(handle, "{:s}", style.suffix())?;
 
                                     self.print_decorations(line_number, true, handle)?;
 
-                                    write!(handle, "{}{}", style.prefix(), &self.ansi_style)?;
+                                    write!(handle, "{:s}{}", style.prefix(), &self.ansi_style)?;
 
                                     cursor = 0;
                                     max_width = cursor_max;
@@ -700,7 +700,7 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
 
                             // flush the buffer
                             cursor += current_width;
-                            write!(handle, "{}", style.suffix())?;
+                            write!(handle, "{:s}", style.suffix())?;
                         }
                     }
                 }
@@ -714,11 +714,11 @@ impl<'a, W: Write> Printer<W> for InteractivePrinter<'a> {
 
                 let width = cursor_max - cursor;
                 if width != 0 {
-                    write!(handle, "{}", ansi_style.prefix())?;
+                    write!(handle, "{:s}", ansi_style.prefix())?;
                     for _ in 0..width {
                         write!(handle, " ")?;
                     }
-                    write!(handle, "{}", ansi_style.suffix())?;
+                    write!(handle, "{:s}", ansi_style.suffix())?;
                 }
             }
             writeln!(handle)?;

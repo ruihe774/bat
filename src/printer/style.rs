@@ -18,7 +18,7 @@ pub struct UnknownStyle {
 
 impl Display for UnknownStyle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown style component '{}'", self.name)
+        write!(f, "unknown style component '{:s}'", self.name)
     }
 }
 
@@ -31,7 +31,7 @@ impl Display for ConflictStyle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "cannot specify style components '{}' and '{}' together",
+            "cannot specify style components '{:s}' and '{:s}' together",
             self.0, self.1
         )
     }

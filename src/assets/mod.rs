@@ -70,7 +70,7 @@ pub struct UnknownSyntax {
 
 impl Display for UnknownSyntax {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown syntax '{}'", self.name)
+        write!(f, "unknown syntax '{:s}'", self.name)
     }
 }
 
@@ -96,7 +96,7 @@ pub struct UnknownTheme {
 
 impl Display for UnknownTheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown theme '{}'", self.name)
+        write!(f, "unknown theme '{:s}'", self.name)
     }
 }
 

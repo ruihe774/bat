@@ -20,25 +20,35 @@ pub mod printer;
 
 #[cfg(all(debug_assertions, feature = "zero-copy"))]
 mod membrane {
+    use std::env;
     use std::sync::atomic::Ordering;
+
+    use once_cell::race::OnceBool;
 
     use crate::input::zero_copy::MEMBRANE;
 
     pub struct Membrane;
 
+    static ENABLE_MEMBRANE: OnceBool = OnceBool::new();
+
     impl Membrane {
         pub fn guard() -> Membrane {
-            assert!(
-                !MEMBRANE.swap(true, Ordering::AcqRel),
-                "membrane is not reentrant"
-            );
+            if ENABLE_MEMBRANE.get_or_init(|| env::var("BAT_MEMBRANE").map_or(false, |s| s == "1"))
+            {
+                assert!(
+                    !MEMBRANE.swap(true, Ordering::AcqRel),
+                    "membrane is not reentrant"
+                );
+            }
             Membrane
         }
     }
 
     impl Drop for Membrane {
         fn drop(&mut self) {
-            MEMBRANE.store(false, Ordering::Release);
+            if ENABLE_MEMBRANE.get().unwrap() {
+                MEMBRANE.store(false, Ordering::Release);
+            }
         }
     }
 }

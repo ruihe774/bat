@@ -70,7 +70,7 @@ pub struct UnknownSyntax {
 
 impl Display for UnknownSyntax {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown syntax '{:s}'", self.name)
+        std::write!(f, "unknown syntax '{}'", self.name)
     }
 }
 
@@ -83,7 +83,7 @@ pub struct SyntaxUndetected {
 
 impl Display for SyntaxUndetected {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unable to detect syntax for '{}'", self.path.display())
+        std::write!(f, "unable to detect syntax for '{}'", self.path.display())
     }
 }
 
@@ -96,7 +96,7 @@ pub struct UnknownTheme {
 
 impl Display for UnknownTheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown theme '{:s}'", self.name)
+        std::write!(f, "unknown theme '{}'", self.name)
     }
 }
 

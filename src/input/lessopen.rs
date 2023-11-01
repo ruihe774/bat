@@ -23,7 +23,7 @@ pub struct PathNotUnicode {
 
 impl Display for PathNotUnicode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "path '{}' is not unicode", self.path.display())
+        std::write!(f, "path '{}' is not unicode", self.path.display())
     }
 }
 

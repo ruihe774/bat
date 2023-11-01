@@ -15,7 +15,7 @@ pub struct LineRangeParseError {
 
 impl Display for LineRangeParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "failed to parse line range '{:s}'", self.value)
+        std::write!(f, "failed to parse line range '{}'", self.value)
     }
 }
 

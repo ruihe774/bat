@@ -34,7 +34,7 @@ pub struct IoCircle {
 
 impl Display for IoCircle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "IO circle detected for '{}'", self.path.display())
+        std::write!(f, "IO circle detected for '{}'", self.path.display())
     }
 }
 
@@ -47,7 +47,7 @@ pub struct IsDirectory {
 
 impl Display for IsDirectory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}' is a directory", self.path.display())
+        std::write!(f, "'{}' is a directory", self.path.display())
     }
 }
 

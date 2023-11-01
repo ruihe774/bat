@@ -30,7 +30,7 @@ pub struct InvalidPagerValueBat;
 
 impl Display for InvalidPagerValueBat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
+        std::write!(
             f,
             "use of bat as a pager is disallowed to avoid infinite recursion"
         )

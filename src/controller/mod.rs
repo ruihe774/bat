@@ -12,6 +12,7 @@ use crate::error::{Context, Error, Result};
 use crate::input::{Input, OpenedInput};
 use crate::output::OutputType;
 use crate::printer::{InteractivePrinter, Printer, SimplePrinter};
+use crate::Membrane;
 use line_range::{LineRanges, RangeCheckResult};
 
 pub mod line_range;
@@ -217,6 +218,8 @@ impl<'a> Controller<'a> {
             if eof {
                 break;
             }
+
+            let _membrane = (line_number != 1).then(Membrane::guard);
 
             match line_ranges.check(line_number) {
                 RangeCheckResult::BeforeOrBetweenRanges => {

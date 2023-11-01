@@ -17,3 +17,41 @@ pub mod error;
 pub mod input;
 pub mod output;
 pub mod printer;
+
+#[cfg(all(debug_assertions, feature = "zero-copy"))]
+mod membrane {
+    use std::sync::atomic::Ordering;
+
+    use crate::input::zero_copy::MEMBRANE;
+
+    pub struct Membrane;
+
+    impl Membrane {
+        pub fn guard() -> Membrane {
+            assert!(
+                !MEMBRANE.swap(true, Ordering::AcqRel),
+                "membrane is not reentrant"
+            );
+            Membrane
+        }
+    }
+
+    impl Drop for Membrane {
+        fn drop(&mut self) {
+            MEMBRANE.store(false, Ordering::Release);
+        }
+    }
+}
+
+#[cfg(not(all(debug_assertions, feature = "zero-copy")))]
+mod membrane {
+    pub struct Membrane;
+
+    impl Membrane {
+        pub fn guard() -> Membrane {
+            Membrane
+        }
+    }
+}
+
+pub(crate) use membrane::Membrane;

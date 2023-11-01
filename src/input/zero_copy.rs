@@ -5,27 +5,47 @@ use std::alloc::{GlobalAlloc, Layout};
 use std::ffi::c_void;
 use std::io::{self, BufRead, Read};
 use std::mem::forget;
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use bincode::BincodeRead;
 #[allow(clippy::wildcard_imports)] // too many imports
 use libmimalloc_sys::*;
 use memmap2::MmapMut;
 
+#[cfg(debug_assertions)]
+use crate::error::Error;
+
 struct TolerentAllocator;
+
+#[cfg(debug_assertions)]
+pub(crate) static MEMBRANE: AtomicBool = AtomicBool::new(false);
 
 unsafe impl GlobalAlloc for TolerentAllocator {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        #[cfg(debug_assertions)]
+        if MEMBRANE.load(Ordering::Relaxed) {
+            break_membrane();
+        }
         mi_malloc_aligned(layout.size(), layout.align()).cast::<u8>()
     }
 
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        #[cfg(debug_assertions)]
+        if MEMBRANE.load(Ordering::Relaxed) {
+            break_membrane();
+        }
         mi_zalloc_aligned(layout.size(), layout.align()).cast::<u8>()
     }
 
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        #[cfg(debug_assertions)]
+        if MEMBRANE.load(Ordering::Relaxed) {
+            break_membrane();
+        }
         let p = ptr.cast::<c_void>();
         if mi_is_in_heap_region(p) {
             mi_realloc_aligned(p, new_size, layout.align()).cast::<u8>()
@@ -41,6 +61,14 @@ unsafe impl GlobalAlloc for TolerentAllocator {
             mi_free_size_aligned(p, layout.size(), layout.align());
         }
     }
+}
+
+#[cfg(debug_assertions)]
+#[cold]
+fn break_membrane() {
+    MEMBRANE.store(false, Ordering::Relaxed);
+    eprintln!("{:?}", Error::msg("membrane broken"));
+    MEMBRANE.store(true, Ordering::Relaxed);
 }
 
 #[global_allocator]

@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::convert::TryInto;
 use std::path::Path;
 

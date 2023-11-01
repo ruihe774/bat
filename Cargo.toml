@@ -172,6 +172,9 @@ version = "0.1"
 optional = true
 features = ["extended"]
 
+[dependencies.zwrite]
+path = "zwrite"
+
 [dependencies.syntect]
 git = "https://github.com/ruihe774/syntect.git"
 branch = "msk"
@@ -209,3 +212,5 @@ codegen-units = 1
 lto = "thin"
 panic = "abort"
 strip = "debuginfo"
+
+[workspace]

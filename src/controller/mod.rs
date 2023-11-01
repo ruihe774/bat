@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::io::{self, IsTerminal, Write};
 
 use clircle::{Clircle, Identifier};

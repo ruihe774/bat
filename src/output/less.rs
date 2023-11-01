@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::ffi::OsStr;
 use std::process::Command;
 

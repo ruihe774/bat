@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::cmp;
 use std::collections::BTreeSet;
 use std::error::Error as StdError;

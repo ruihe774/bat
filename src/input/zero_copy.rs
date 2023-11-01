@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::alloc::{GlobalAlloc, Layout};
 use std::ffi::c_void;
 use std::io::{self, BufRead, Read};

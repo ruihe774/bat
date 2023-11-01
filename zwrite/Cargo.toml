@@ -1,0 +1,14 @@
+[package]
+name = "zwrite"
+version = "0.1.0-proto"
+description = "write! with no dyn"
+authors = ["Misaki Kasumi <misakikasumi@outlook.com>"]
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2"
+quote = "1"
+proc-macro2 = "1"

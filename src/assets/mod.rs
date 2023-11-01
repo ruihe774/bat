@@ -1,7 +1,10 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::env;
 use std::error::Error as StdError;
 use std::ffi::OsStr;
-use std::fmt::{self, Display, Write as _};
+use std::fmt::{self, Display};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};

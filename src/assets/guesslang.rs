@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::cell::Cell;
 use std::sync::Arc;
 use std::{cmp::Ordering, fmt::Debug};

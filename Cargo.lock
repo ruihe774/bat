@@ -107,6 +107,7 @@ dependencies = [
  "wait-timeout",
  "walkdir",
  "wild",
+ "zwrite",
 ]
 
 [[package]]
@@ -1562,4 +1563,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
+]
+
+[[package]]
+name = "zwrite"
+version = "0.1.0-proto"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
 ]

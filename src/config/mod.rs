@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::env::{self, VarError};
 use std::io::{self, IsTerminal};
 use std::num::NonZeroUsize;

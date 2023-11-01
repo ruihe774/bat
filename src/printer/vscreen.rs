@@ -1,4 +1,7 @@
-use std::fmt::{self, Display, Write};
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
+use std::fmt::{self, Display};
 
 use crate::config::ConfigString;
 

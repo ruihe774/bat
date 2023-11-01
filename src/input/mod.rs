@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use zwrite::{write, writeln};
+
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::ffi::{OsStr, OsString};

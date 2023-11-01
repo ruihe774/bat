@@ -236,9 +236,6 @@
 #![warn(trivial_casts, trivial_numeric_casts)]
 // #![warn(unused_extern_crates, unused_qualifications)]
 
-#[cfg(test)]
-doc_comment::doctest!("../README.md");
-
 pub mod ansi;
 pub use ansi::{Infix, Prefix, Suffix};
 

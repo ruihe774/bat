@@ -44,9 +44,6 @@ pub struct Style {
 
     /// Whether this style is struckthrough.
     pub is_strikethrough: bool,
-
-    /// Wether this style is always displayed starting with a reset code to clear any remaining style artifacts
-    pub prefix_with_reset: bool,
 }
 
 impl Style {
@@ -62,23 +59,6 @@ impl Style {
     /// ```
     pub fn new() -> Style {
         Style::default()
-    }
-
-    /// Returns a [`Style`] with the `Style.prefix_with_reset` property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().reset_before_style();
-    /// println!("{}", style.paint("hey"));
-    /// ```
-    pub const fn reset_before_style(&self) -> Style {
-        Style {
-            prefix_with_reset: true,
-            ..*self
-        }
     }
 
     /// Returns a `Style` with the bold property set.
@@ -289,7 +269,6 @@ impl Default for Style {
             is_reverse: false,
             is_hidden: false,
             is_strikethrough: false,
-            prefix_with_reset: false,
         }
     }
 }
@@ -559,25 +538,6 @@ impl Color {
         Style {
             foreground: Some(self),
             is_strikethrough: true,
-            ..Style::default()
-        }
-    }
-
-    /// Returns a `Style` thats resets all styling before applying
-    /// the foreground color set to this color.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Fixed(244).reset_before_style();
-    /// println!("{}", style.paint("yo"));
-    /// ```
-    pub fn reset_before_style(self) -> Style {
-        Style {
-            foreground: Some(self),
-            prefix_with_reset: true,
             ..Style::default()
         }
     }

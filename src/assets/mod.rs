@@ -534,7 +534,6 @@ mod tests {
     use std::ffi::{OsStr, OsString};
 
     use std::fs::File;
-    use std::io::Write;
     use tempfile::TempDir;
 
     use crate::input::Input;
@@ -578,7 +577,7 @@ mod tests {
             let file_path = self.temp_dir.path().join(file_name);
             {
                 let mut temp_file = File::create(&file_path).unwrap();
-                writeln!(temp_file, "{first_line}").unwrap();
+                self::writeln!(temp_file, "{first_line}").unwrap();
             }
 
             let input = Input::from_file(&file_path);

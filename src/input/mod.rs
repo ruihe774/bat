@@ -238,7 +238,7 @@ pub(crate) enum ContentType {
 }
 
 pub(crate) struct InputReader {
-    inner: Box<dyn BufRead>,
+    inner: ProtectiveReader<Box<dyn BufRead>>,
     pub(crate) first_read: Option<String>,
     pub(crate) content_type: Option<ContentType>,
 }
@@ -277,7 +277,7 @@ impl InputReader {
         };
 
         InputReader {
-            inner: Box::new(reader),
+            inner: ProtectiveReader::new(Box::new(reader)),
             first_read,
             content_type,
         }
@@ -485,6 +485,62 @@ fn inspect(buffer: &[u8]) -> ContentType {
             (&format != b"data" && &format != b"very short file (no magic)")
                 .then(|| format.into_string_lossy().into())
         }),
+    }
+}
+
+struct ProtectiveReader<R: BufRead> {
+    inner: R,
+    pub is_eof: bool,
+}
+
+impl<R: BufRead> ProtectiveReader<R> {
+    fn new(inner: R) -> Self {
+        ProtectiveReader {
+            inner,
+            is_eof: false,
+        }
+    }
+}
+
+impl<R: BufRead> Read for ProtectiveReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let slice = self.fill_buf()?;
+        let len = slice.len().min(buf.len());
+        buf[..len].copy_from_slice(&slice[..len]);
+        self.consume(len);
+        Ok(len)
+    }
+}
+
+impl<R: BufRead> BufRead for ProtectiveReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if self.is_eof {
+            return Ok(&[]);
+        }
+        loop {
+            let r = self.inner.fill_buf();
+            if r.as_ref()
+                .is_err_and(|e| e.kind() != io::ErrorKind::Interrupted)
+            {
+                break;
+            }
+            if r.as_ref().is_ok_and(|buf| buf.is_empty()) {
+                self.is_eof = true;
+            }
+            if r.is_ok() {
+                break;
+            }
+        }
+        // in safe Rust, we have to call this again
+        if self.is_eof {
+            Ok(&[])
+        } else {
+            self.inner.fill_buf()
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.inner.consume(amt);
     }
 }
 

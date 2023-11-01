@@ -10,7 +10,9 @@ pub mod ansi;
 mod style;
 pub use style::{Color, Style};
 
+#[cfg(windows)]
 mod windows;
+#[cfg(windows)]
 pub use crate::windows::*;
 
 mod rgb;

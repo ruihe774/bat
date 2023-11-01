@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::too_many_lines)]
+
 use std::mem;
 
 use proc_macro2::{Span, TokenStream};
@@ -66,9 +69,8 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
                     }
                     in_brace = true;
                     continue;
-                } else {
-                    return invalid_fmt_str;
                 }
+                return invalid_fmt_str;
             }
         } else if c == '}' {
             if in_brace {
@@ -77,7 +79,7 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
                     fmt_args.push(FmtArg::Display(match args.next() {
                         Some(e) => e,
                         None => return mismatch_args,
-                    }))
+                    }));
                 } else if let Ok(ident) = parse_str::<Ident>(&pat) {
                     let e: Expr = parse_quote_spanned! { sspan => #ident };
                     fmt_args.push(FmtArg::Display(e));
@@ -88,16 +90,14 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
                             e @ Some(_) => e,
                             None => return mismatch_args,
                         },
-                    ))
+                    ));
                 } else {
-                    fmt_args.push(FmtArg::Format(pat, None))
+                    fmt_args.push(FmtArg::Format(pat, None));
                 }
                 in_brace = false;
                 continue;
-            } else {
-                if iter.next_if_eq(&'}').is_none() {
-                    return invalid_fmt_str;
-                }
+            } else if iter.next_if_eq(&'}').is_none() {
+                return invalid_fmt_str;
             }
         }
         current_string.push(c);
@@ -120,8 +120,7 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
         .cloned()
         .zip(fmt_args.iter())
         .map(|(a, fmt_arg)| match fmt_arg {
-            FmtArg::String(_) => quote! { self.write_str(#a)?; },
-            FmtArg::Display(_) => quote! { self.write_str(#a)?; },
+            FmtArg::String(_) | FmtArg::Display(_) => quote! { self.write_str(#a)?; },
             FmtArg::Format(_, _) => quote! { self.write_fmt(#a)?; },
         })
         .collect();
@@ -143,10 +142,11 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
             FmtArg::String(s) => quote! { #s, },
             FmtArg::Display(e) => quote! { (#e).to_compact_string().as_str(), },
             FmtArg::Format(mut f, e) => {
-                f = format!("{{{}}}", f);
-                match e {
-                    Some(e) => quote! { std::format_args!(#f, (#e)), },
-                    None => quote! { std::format_args!(#f), },
+                f = format!("{{{f}}}");
+                if let Some(e) = e {
+                    quote! { std::format_args!(#f, (#e)), }
+                } else {
+                    quote! { std::format_args!(#f), }
                 }
             }
         })
@@ -155,7 +155,7 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
     if ln {
         body.extend(quote! {
             self.write_char('\n')?;
-        })
+        });
     }
 
     let whole = quote! {

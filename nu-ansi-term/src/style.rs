@@ -1,4 +1,4 @@
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Default)]
 #[cfg_attr(
     feature = "derive_serde_style",
     derive(serde::Deserialize, serde::Serialize)
@@ -112,23 +112,6 @@ impl Style {
 
     pub fn is_plain(self) -> bool {
         self == Style::default()
-    }
-}
-
-impl Default for Style {
-    fn default() -> Style {
-        Style {
-            foreground: None,
-            background: None,
-            is_bold: false,
-            is_dimmed: false,
-            is_italic: false,
-            is_underline: false,
-            is_blink: false,
-            is_reverse: false,
-            is_hidden: false,
-            is_strikethrough: false,
-        }
     }
 }
 

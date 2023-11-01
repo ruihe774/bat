@@ -7,6 +7,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::redundant_else)]
 #![allow(clippy::struct_excessive_bools)]
+#![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
 
 pub mod assets;

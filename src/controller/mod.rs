@@ -238,6 +238,8 @@ impl<'a> Controller<'a> {
                     }
 
                     printer.print_line(false, writer, line_number, &line_buffer)?;
+
+                    writer.flush()?;
                 }
 
                 RangeCheckResult::AfterLastRange => unreachable!(),

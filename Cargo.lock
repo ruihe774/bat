@@ -391,7 +391,7 @@ dependencies = [
 [[package]]
 name = "fancy-regex"
 version = "0.11.0"
-source = "git+https://github.com/ruihe774/fancy-regex.git?branch=msk#e8dcdba6f06a4f613e9c063f7529025941021f40"
+source = "git+https://github.com/ruihe774/fancy-regex.git?branch=msk#26aabb71a308b4ec15b30790e9d7065d018a4195"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -1088,9 +1088,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.107"
+version = "1.0.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b420ce6e3d8bd882e9b243c6eed35dbc9a6110c9769e74b584e0d68d1f20c65"
+checksum = "3d1c7e3eac408d115102c4c24ad393e0821bb3a5df4d506a80f85f7a742a526b"
 dependencies = [
  "itoa",
  "ryu",
@@ -1186,7 +1186,7 @@ dependencies = [
 [[package]]
 name = "syntect"
 version = "5.1.0"
-source = "git+https://github.com/ruihe774/syntect.git?branch=msk#113d280d18c7cc46e91331fd6e7583078b182a45"
+source = "git+https://github.com/ruihe774/syntect.git?branch=msk#b28f70fcfea4e8069e9c14f63faf0d5176705fd6"
 dependencies = [
  "bincode",
  "bitflags 1.3.2",
@@ -1198,6 +1198,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "smallvec",
  "thiserror",
  "walkdir",
  "yaml-rust",

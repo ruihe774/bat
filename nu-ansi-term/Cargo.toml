@@ -21,6 +21,8 @@ derive_serde_style = ["serde"]
 gnu_legacy = []
 
 [dependencies]
+compact_str = "0.7"
+zwrite = { path = "../zwrite" }
 serde = { version="1.0.152", features=["derive"], optional=true }
 
 [target.'cfg(windows)'.dependencies.windows]

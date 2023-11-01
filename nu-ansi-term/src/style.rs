@@ -1,14 +1,3 @@
-/// A style is a collection of properties that can format a string
-/// using ANSI escape codes.
-///
-/// # Examples
-///
-/// ```
-/// use nu_ansi_term::{Style, Color};
-///
-/// let style = Style::new().bold().on(Color::Black);
-/// println!("{}", style.paint("Bold on black"));
-/// ```
 #[derive(Eq, PartialEq, Clone, Copy)]
 #[cfg_attr(
     feature = "derive_serde_style",
@@ -47,30 +36,10 @@ pub struct Style {
 }
 
 impl Style {
-    /// Creates a new Style with no properties set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new();
-    /// println!("{}", style.paint("hi"));
-    /// ```
     pub fn new() -> Style {
         Style::default()
     }
 
-    /// Returns a `Style` with the bold property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().bold();
-    /// println!("{}", style.paint("hey"));
-    /// ```
     pub const fn bold(&self) -> Style {
         Style {
             is_bold: true,
@@ -78,16 +47,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the dimmed property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().dimmed();
-    /// println!("{}", style.paint("sup"));
-    /// ```
     pub const fn dimmed(&self) -> Style {
         Style {
             is_dimmed: true,
@@ -95,16 +54,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the italic property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().italic();
-    /// println!("{}", style.paint("greetings"));
-    /// ```
     pub const fn italic(&self) -> Style {
         Style {
             is_italic: true,
@@ -112,16 +61,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the underline property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().underline();
-    /// println!("{}", style.paint("salutations"));
-    /// ```
     pub const fn underline(&self) -> Style {
         Style {
             is_underline: true,
@@ -129,15 +68,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the blink property set.
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().blink();
-    /// println!("{}", style.paint("wazzup"));
-    /// ```
     pub const fn blink(&self) -> Style {
         Style {
             is_blink: true,
@@ -145,16 +75,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the reverse property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().reverse();
-    /// println!("{}", style.paint("aloha"));
-    /// ```
     pub const fn reverse(&self) -> Style {
         Style {
             is_reverse: true,
@@ -162,16 +82,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the hidden property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().hidden();
-    /// println!("{}", style.paint("ahoy"));
-    /// ```
     pub const fn hidden(&self) -> Style {
         Style {
             is_hidden: true,
@@ -179,16 +89,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the strikethrough property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// let style = Style::new().strikethrough();
-    /// println!("{}", style.paint("yo"));
-    /// ```
     pub const fn strikethrough(&self) -> Style {
         Style {
             is_strikethrough: true,
@@ -196,16 +96,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the foreground color property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::{Style, Color};
-    ///
-    /// let style = Style::new().fg(Color::Yellow);
-    /// println!("{}", style.paint("hi"));
-    /// ```
     pub const fn fg(&self, foreground: Color) -> Style {
         Style {
             foreground: Some(foreground),
@@ -213,16 +103,6 @@ impl Style {
         }
     }
 
-    /// Returns a `Style` with the background color property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::{Style, Color};
-    ///
-    /// let style = Style::new().on(Color::Blue);
-    /// println!("{}", style.paint("eyyyy"));
-    /// ```
     pub const fn on(&self, background: Color) -> Style {
         Style {
             background: Some(background),
@@ -230,33 +110,12 @@ impl Style {
         }
     }
 
-    /// Return true if this `Style` has no actual styles, and can be written
-    /// without any control characters.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    ///
-    /// assert_eq!(true,  Style::default().is_plain());
-    /// assert_eq!(false, Style::default().bold().is_plain());
-    /// ```
     pub fn is_plain(self) -> bool {
         self == Style::default()
     }
 }
 
 impl Default for Style {
-    /// Returns a style with *no* properties set. Formatting text using this
-    /// style returns the exact same text.
-    ///
-    /// ```
-    /// use nu_ansi_term::Style;
-    /// assert_eq!(None,  Style::default().foreground);
-    /// assert_eq!(None,  Style::default().background);
-    /// assert_eq!(false, Style::default().is_bold);
-    /// assert_eq!("txt", Style::default().paint("txt").to_string());
-    /// ```
     fn default() -> Style {
         Style {
             foreground: None,
@@ -373,16 +232,6 @@ pub enum Color {
 }
 
 impl Color {
-    /// Returns a `Style` with the foreground color set to this color.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Red.normal();
-    /// println!("{}", style.paint("hi"));
-    /// ```
     pub fn normal(self) -> Style {
         Style {
             foreground: Some(self),
@@ -390,17 +239,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// bold property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Green.bold();
-    /// println!("{}", style.paint("hey"));
-    /// ```
     pub fn bold(self) -> Style {
         Style {
             foreground: Some(self),
@@ -409,17 +247,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// dimmed property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Yellow.dimmed();
-    /// println!("{}", style.paint("sup"));
-    /// ```
     pub fn dimmed(self) -> Style {
         Style {
             foreground: Some(self),
@@ -428,17 +255,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// italic property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Blue.italic();
-    /// println!("{}", style.paint("greetings"));
-    /// ```
     pub fn italic(self) -> Style {
         Style {
             foreground: Some(self),
@@ -447,17 +263,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// underline property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Purple.underline();
-    /// println!("{}", style.paint("salutations"));
-    /// ```
     pub fn underline(self) -> Style {
         Style {
             foreground: Some(self),
@@ -466,17 +271,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// blink property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Cyan.blink();
-    /// println!("{}", style.paint("wazzup"));
-    /// ```
     pub fn blink(self) -> Style {
         Style {
             foreground: Some(self),
@@ -485,17 +279,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// reverse property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Black.reverse();
-    /// println!("{}", style.paint("aloha"));
-    /// ```
     pub fn reverse(self) -> Style {
         Style {
             foreground: Some(self),
@@ -504,17 +287,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// hidden property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::White.hidden();
-    /// println!("{}", style.paint("ahoy"));
-    /// ```
     pub fn hidden(self) -> Style {
         Style {
             foreground: Some(self),
@@ -523,17 +295,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// strikethrough property set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Fixed(244).strikethrough();
-    /// println!("{}", style.paint("yo"));
-    /// ```
     pub fn strikethrough(self) -> Style {
         Style {
             foreground: Some(self),
@@ -542,17 +303,6 @@ impl Color {
         }
     }
 
-    /// Returns a `Style` with the foreground color set to this color and the
-    /// background color property set to the given color.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use nu_ansi_term::Color;
-    ///
-    /// let style = Color::Rgb(31, 31, 31).on(Color::White);
-    /// println!("{}", style.paint("eyyyy"));
-    /// ```
     pub fn on(self, background: Color) -> Style {
         Style {
             foreground: Some(self),

@@ -9,7 +9,6 @@ use syn::{
     parse_macro_input, parse_quote, parse_quote_spanned, parse_str, Error, Expr, Ident, Lit,
 };
 
-#[derive(Debug, Clone)]
 enum FmtArg {
     String(String),
     Display(Expr),

@@ -88,7 +88,7 @@ fn write_impl(tokens: proc_macro::TokenStream, ln: bool) -> proc_macro::TokenStr
                     fmt_args.push(FmtArg::String(match args.next() {
                         Some(e) => e,
                         None => return mismatch_args,
-                    }))
+                    }));
                 } else if pat.starts_with(':') {
                     fmt_args.push(FmtArg::Format(
                         pat,

@@ -31,7 +31,7 @@ impl ToCompactString for AnsiStyle {
     fn to_compact_string(&self) -> ConfigString {
         self.attributes
             .as_ref()
-            .map(|attr| attr.to_compact_string())
+            .map(ToCompactString::to_compact_string)
             .unwrap_or_default()
     }
 }

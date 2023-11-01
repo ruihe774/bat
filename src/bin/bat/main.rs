@@ -118,7 +118,7 @@ fn get_languages(config: &Config, cache_dir: &Path) -> Result<String> {
                 }
 
                 num_chars += new_chars;
-                write!(result, "{}", style.paint(&word[..])).unwrap();
+                write!(result, "{}{}{}", style.prefix(), word, style.suffix()).unwrap();
                 if extension.peek().is_some() {
                     result.push_str(comma_separator);
                 }
@@ -147,10 +147,10 @@ fn list_themes(mut config: Config, _config_dir: &Path, cache_dir: &Path) -> Resu
     let assets = HighlightingAssets::new(cache_dir)?;
     config.language = Some("Rust".into());
     config.style_components = StyleComponents::plain().consolidate(false).unwrap();
-
+    let bold = Style::new().bold();
     if config.colored_output && !config.loop_through {
         for theme in assets.themes() {
-            println!("Theme: {}\n", Style::new().bold().paint(theme));
+            println!("Theme: {}{}{}\n", bold.prefix(), theme, bold.suffix());
             config.theme = Some(theme.into());
             assert!(matches!(
                 Controller::new(&config, &assets).run(vec![Input::from_reader(

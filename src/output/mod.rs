@@ -6,7 +6,14 @@ use std::fmt::{self, Display};
 use std::io::{self, Write};
 use std::mem;
 #[cfg(feature = "paging")]
-use std::process::{Child, ChildStdin};
+use std::process::Child;
+#[cfg(all(feature = "paging", not(unix)))]
+use std::process::ChildStdin;
+#[cfg(unix)]
+use std::{
+    fs::File,
+    os::fd::{AsFd, OwnedFd},
+};
 
 use crate::config::ConsolidatedConfig as Config;
 use crate::error::Result;
@@ -39,11 +46,20 @@ enum SingleScreenAction {
     Nothing,
 }
 
+#[cfg(not(unix))]
 #[derive(Debug)]
 pub(crate) enum OutputType {
     #[cfg(feature = "paging")]
     Pager(Child, Option<io::BufWriter<ChildStdin>>),
     Stdout(io::StdoutLock<'static>),
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+pub(crate) enum OutputType {
+    #[cfg(feature = "paging")]
+    Pager(Child, Option<io::BufWriter<File>>),
+    Stdout(io::BufWriter<File>),
 }
 
 impl OutputType {
@@ -170,12 +186,21 @@ impl OutputType {
                 }
             })
             .map_or_else(OutputType::stdout, |(child, stdin)| {
-                OutputType::Pager(child, Some(io::BufWriter::with_capacity(1024, stdin)))
+                #[cfg(unix)]
+                let stdin = File::from(OwnedFd::from(stdin));
+                OutputType::Pager(child, Some(new_line_buf(stdin)))
             }))
     }
 
+    #[cfg(not(unix))]
     pub fn stdout() -> Self {
         OutputType::Stdout(io::stdout().lock())
+    }
+
+    #[cfg(unix)]
+    pub fn stdout() -> Self {
+        let fd = io::stdout().as_fd().try_clone_to_owned().unwrap();
+        OutputType::Stdout(new_line_buf(File::from(fd)))
     }
 
     #[cfg(feature = "paging")]
@@ -208,6 +233,10 @@ impl OutputType {
         #[cfg(not(feature = "paging"))]
         None
     }
+}
+
+fn new_line_buf<F: Write>(file: F) -> io::BufWriter<F> {
+    io::BufWriter::with_capacity(1024, file)
 }
 
 #[cfg(feature = "paging")]

@@ -1,4 +1,4 @@
-#[derive(Eq, PartialEq, Clone, Copy, Default)]
+#[derive(Eq, PartialEq, Clone, Copy, Default, Debug)]
 #[cfg_attr(
     feature = "derive_serde_style",
     derive(serde::Deserialize, serde::Serialize)

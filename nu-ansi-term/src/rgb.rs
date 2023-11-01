@@ -114,14 +114,6 @@ impl From<(f32, f32, f32)> for Rgb {
     }
 }
 
-use crate::ANSIColorCode;
-use crate::TargetGround;
-impl ANSIColorCode for Rgb {
-    fn ansi_color_code(&self, target: TargetGround) -> String {
-        format!("{};2;{};{};{}", target.code() + 8, self.r, self.g, self.b)
-    }
-}
-
 const fn rgb_add(lhs: &Rgb, rhs: &Rgb) -> Rgb {
     Rgb::new(
         lhs.r.saturating_add(rhs.r),

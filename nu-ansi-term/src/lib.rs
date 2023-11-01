@@ -13,10 +13,5 @@ pub use style::{Color, Style};
 mod windows;
 pub use crate::windows::*;
 
-mod debug;
-
-pub mod gradient;
-pub use gradient::*;
-
 mod rgb;
 pub use rgb::*;

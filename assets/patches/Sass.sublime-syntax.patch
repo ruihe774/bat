@@ -7,7 +7,7 @@ index b181092..4479fbb 100644
    # 3. Assume unicode or escape character if backslash is matched, instead of
    #    matching (?!{{escape}}) which also effects performance negative.
 -  break: (?=[[^-_[:alnum:]\\]&&[[:ascii:]]]|\Z)
-+  break: (?=[[^-_[:alnum:]\\]&&[[:ascii:]]]|$)
++  break: (?=[[^-_[:alnum:]\\]&&[[:ascii:]]]|\z)
  
    integer: '([-+]?)(\d+)'
    float: '([-+]?)(\d*(\.)\d+(?:[eE][-+]?\d+)?|\d+[eE][-+]?\d+)'

@@ -1,6 +1,6 @@
 [submodule "assets/syntaxes/Elixir"]
 	path = assets/syntaxes/02_Extra/Elixir
-	url = https://github.com/elixir-editors/elixir-sublime-syntax
+	url = https://github.com/princemaple/elixir-sublime-syntax/
 [submodule "assets/syntaxes/Packages"]
 	path = assets/syntaxes/01_Packages
 	url = https://github.com/sublimehq/Packages/

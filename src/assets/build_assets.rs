@@ -112,12 +112,12 @@ pub(crate) fn asset_to_contents<T: serde::Serialize>(
 ) -> Result<Vec<u8>> {
     let mut contents = vec![];
     if compressed {
-        bincode::serialize_into(
+        serializer().serialize_into(
             flate2::write::GzEncoder::new(&mut contents, flate2::Compression::best()),
             asset,
         )
     } else {
-        bincode::serialize_into(&mut contents, asset)
+        serializer().serialize_into(&mut contents, asset)
     }
     .with_context(|| format!("Could not serialize {}", description))?;
     Ok(contents)

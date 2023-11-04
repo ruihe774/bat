@@ -9,6 +9,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
+use bincode::Options as _;
 use flate2::bufread::GzDecoder;
 #[cfg(feature = "zero-copy")]
 use memmap2::MmapOptions;
@@ -491,11 +492,11 @@ fn load_asset_bytes(
 
 fn asset_from_bytes<T: DeserializeOwned>(bytes: Vec<u8>) -> Result<T> {
     #[cfg(feature = "zero-copy")]
-    return Ok(bincode::deserialize_from_custom(
+    return Ok(deserializer().deserialize_from_custom(
         LeakySliceReader::from_leaky_vec(bytes),
     )?);
     #[cfg(not(feature = "zero-copy"))]
-    return Ok(bincode::deserialize(bytes.as_slice())?);
+    return Ok(deserializer().deserialize(bytes.as_slice())?);
 }
 
 fn absolute_path(path: impl AsRef<Path>) -> io::Result<PathBuf> {
@@ -525,6 +526,15 @@ fn absolute_path(path: impl AsRef<Path>) -> io::Result<PathBuf> {
         };
     }
     pathbuf.map_or_else(env::current_dir, Ok)
+}
+
+#[cfg(feature = "build-assets")]
+fn serializer() -> impl bincode::Options {
+    bincode::DefaultOptions::new()
+}
+
+fn deserializer() -> impl bincode::Options {
+    bincode::DefaultOptions::new()
 }
 
 #[cfg(test)]

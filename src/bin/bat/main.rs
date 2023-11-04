@@ -31,7 +31,7 @@ fn build_assets(matches: &clap::ArgMatches, config_dir: &Path, cache_dir: &Path)
         .get_one::<String>("source")
         .map_or(config_dir, Path::new);
 
-    bat::assets::build(source_dir, cache_dir)
+    bat::assets::build_assets::build(source_dir, cache_dir)
 }
 #[cfg(feature = "build-assets")]
 fn run_cache_subcommand(
@@ -250,13 +250,12 @@ fn run() -> Result<ErrorHandling> {
             // arguments for subcommand 'cache' are not mandatory.
             // If there are non-zero arguments, execute the subcommand cache, else, open the file cache.
             if cache_matches.args_present() {
-                run_cache_subcommand(cache_matches, config_dir, cache_dir)?;
-                Ok(true)
+                run_cache_subcommand(cache_matches, &config_dir, &cache_dir)?;
+                Ok(ErrorHandling::NoError)
             } else {
                 let inputs = vec![Input::from_file("cache")];
-                let config = app.config(&inputs)?;
-
-                run_controller(inputs, &config, cache_dir)
+                let config = cli::get_config(&matches, &config_file)?.consolidate(&inputs)?;
+                run_controller(inputs, &config, &cache_dir)
             }
         }
         _ => {

@@ -461,7 +461,7 @@ pub fn build_app() -> Command {
     // Check if the current directory contains a file name cache. Otherwise,
     // enable the 'bat cache' subcommand.
     #[cfg(feature = "build-assets")]
-    return if Path::new("cache").exists() {
+    return if std::path::Path::new("cache").exists() {
         app
     } else {
         app.subcommand(
@@ -487,7 +487,7 @@ pub fn build_app() -> Command {
                         .help("Remove the cached syntax definitions and themes."),
                 )
                 .group(
-                    ArgGroup::new("cache-actions")
+                    clap::ArgGroup::new("cache-actions")
                         .args(["build", "clear"])
                         .required(true),
                 )

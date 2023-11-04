@@ -11,7 +11,6 @@ use serde_bytes::{ByteBuf, Bytes};
 use syntect::highlighting::Theme;
 
 use super::asset_from_bytes;
-use crate::config::ConfigString;
 use crate::error::Result;
 
 /// Same structure as a [`syntect::highlighting::ThemeSet`] but with themes
@@ -19,7 +18,7 @@ use crate::error::Result;
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct LazyThemeSet {
     /// This is a [`BTreeMap`] because that's what [`syntect::highlighting::ThemeSet`] uses
-    themes: BTreeMap<ConfigString, LazyTheme>,
+    themes: BTreeMap<String, LazyTheme>,
 }
 
 /// Stores raw serialized data for a theme with methods to lazily deserialize
@@ -46,7 +45,7 @@ impl LazyThemeSet {
 
     /// Returns the name of all themes.
     pub fn themes(&self) -> impl Iterator<Item = &str> {
-        self.themes.keys().map(ConfigString::as_str)
+        self.themes.keys().map(String::as_str)
     }
 }
 
@@ -80,7 +79,7 @@ where
 
 #[cfg(feature = "build-assets")]
 impl TryFrom<syntect::highlighting::ThemeSet> for LazyThemeSet {
-    type Error = Error;
+    type Error = crate::error::Error;
 
     /// To collect themes, a [`syntect::highlighting::ThemeSet`] is needed. Once all desired themes
     /// have been added, we need a way to convert that into [`LazyThemeSet`] so

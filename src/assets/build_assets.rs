@@ -119,18 +119,18 @@ pub(crate) fn asset_to_contents<T: serde::Serialize>(
     } else {
         bincode::serialize_into(&mut contents, asset)
     }
-    .map_err(|_| format!("Could not serialize {}", description))?;
+    .with_context(|| format!("Could not serialize {}", description))?;
     Ok(contents)
 }
 
 fn asset_to_cache<T: serde::Serialize>(asset: &T, path: &Path, description: &str) -> Result<()> {
     print!(
-        "Writing {:s} to {:s} ... ",
+        "Writing {} to {} ... ",
         description,
         path.to_string_lossy()
     );
     let contents = asset_to_contents(asset, description, true)?;
-    std::fs::write(path, &contents[..]).map_err(|_| {
+    std::fs::write(path, &contents[..]).with_context(|| {
         format!(
             "Could not save {} to {}",
             description,
@@ -217,7 +217,7 @@ mod acknowledgements {
         } else if license_not_needed_in_acknowledgements(&license_text) {
             Ok(None)
         } else {
-            Err(format!("ERROR: License is of unknown type: {:?}", path).into())
+            Err(Error::msg(format!("License is of unknown type: {:?}", path)))
         }
     }
 
@@ -264,7 +264,7 @@ mod acknowledgements {
     ) {
         write!(
             acknowledgements,
-            "## {:s}\n\n{:s}",
+            "## {}\n\n{}",
             relative_path, license_text
         )
         .ok();
